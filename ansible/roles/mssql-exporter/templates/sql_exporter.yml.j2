@@ -1,0 +1,86 @@
+global:
+  scrape_timeout: 10s
+  scrape_timeout_offset: 500ms
+  min_interval: 0s
+  max_connections: 3
+  max_idle_connections: 3
+
+target:
+  data_source_name: "{{ mssql_dsn }}"
+  collectors:
+    - mssql_standard
+
+collectors:
+  - collector_name: mssql_standard
+    metrics:
+      - metric_name: mssql_up
+        type: gauge
+        help: "1 if MSSQL is reachable"
+        values: [1]
+        query: "SELECT 1"
+
+      - metric_name: mssql_connections_total
+        type: gauge
+        help: "Number of active connections"
+        values: [count]
+        query: |
+          SELECT COUNT(*) AS count
+          FROM sys.dm_exec_sessions
+          WHERE is_user_process = 1
+
+      - metric_name: mssql_deadlocks_total
+        type: counter
+        help: "Number of deadlocks since last restart"
+        values: [deadlocks]
+        query: |
+          SELECT cntr_value AS deadlocks
+          FROM sys.dm_os_performance_counters
+          WHERE counter_name = 'Number of Deadlocks/sec'
+            AND instance_name = '_Total'
+
+      - metric_name: mssql_blocked_processes
+        type: gauge
+        help: "Number of currently blocked processes"
+        values: [blocked]
+        query: |
+          SELECT COUNT(*) AS blocked
+          FROM sys.dm_exec_requests
+          WHERE blocking_session_id != 0
+
+      - metric_name: mssql_database_size_bytes
+        type: gauge
+        help: "Database size in bytes"
+        key_labels: [db_name]
+        values: [size_bytes]
+        query: |
+          SELECT
+            name AS db_name,
+            SUM(size) * 8 * 1024 AS size_bytes
+          FROM sys.master_files
+          GROUP BY name
+
+      - metric_name: mssql_log_space_used_percent
+        type: gauge
+        help: "Log space used percentage per database"
+        key_labels: [db_name]
+        values: [used_percent]
+        query: |
+          SELECT
+            instance_name AS db_name,
+            cntr_value    AS used_percent
+          FROM sys.dm_os_performance_counters
+          WHERE counter_name = 'Percent Log Used'
+            AND instance_name NOT IN ('_Total', 'mssqlsystemresource')
+
+      - metric_name: mssql_buffer_cache_hit_ratio
+        type: gauge
+        help: "Buffer cache hit ratio (higher is better)"
+        values: [ratio]
+        query: |
+          SELECT
+            (a.cntr_value * 1.0 / b.cntr_value) AS ratio
+          FROM sys.dm_os_performance_counters a
+          JOIN sys.dm_os_performance_counters b
+            ON b.counter_name = 'Buffer cache hit ratio base'
+          WHERE a.counter_name = 'Buffer cache hit ratio'
+            AND a.object_name LIKE '%Buffer Manager%'

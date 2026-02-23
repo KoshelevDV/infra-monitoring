@@ -1,0 +1,86 @@
+---
+# jmx_prometheus_javaagent config
+# Exposes JVM + Kafka Connect / Debezium metrics
+
+startDelaySeconds: 0
+ssl: false
+lowercaseOutputName: true
+lowercaseOutputLabelNames: true
+
+rules:
+  # ── Debezium connector metrics ──────────────────────────────────────────────
+  - pattern: "debezium\\.([^.]+)\\.([^.]+)\\.([^.]+)<type=connector-metrics, context=([^,]+), server=([^,]+), binlogFilename=([^>]+)><>([^:]+)"
+    name: debezium_$1_connector_$7
+    labels:
+      connector: $2
+      task: $3
+      context: $4
+      server: $5
+    help: "Debezium connector metric"
+    type: GAUGE
+
+  - pattern: "debezium\\.([^.]+)\\.([^.]+)\\.([^.]+)<type=connector-metrics, context=([^,]+), server=([^>]+)><>([^:]+)"
+    name: debezium_$1_connector_$6
+    labels:
+      connector: $2
+      task: $3
+      context: $4
+      server: $5
+    help: "Debezium connector metric"
+    type: GAUGE
+
+  # ── Kafka Connect worker metrics ─────────────────────────────────────────────
+  - pattern: "kafka\\.connect<type=connect-worker-metrics><>([^:]+)"
+    name: kafka_connect_worker_$1
+    help: "Kafka Connect worker metric"
+    type: GAUGE
+
+  - pattern: "kafka\\.connect<type=connect-worker-rebalance-metrics><>([^:]+)"
+    name: kafka_connect_worker_rebalance_$1
+    help: "Kafka Connect rebalance metric"
+    type: GAUGE
+
+  # ── JVM Memory ───────────────────────────────────────────────────────────────
+  - pattern: "java\\.lang<type=Memory><HeapMemoryUsage>(\\w+)"
+    name: jvm_memory_heap_$1_bytes
+    help: "JVM heap memory $1"
+    type: GAUGE
+
+  - pattern: "java\\.lang<type=Memory><NonHeapMemoryUsage>(\\w+)"
+    name: jvm_memory_nonheap_$1_bytes
+    help: "JVM non-heap memory $1"
+    type: GAUGE
+
+  - pattern: "java\\.lang<type=MemoryPool, name=(.+)><Usage>(\\w+)"
+    name: jvm_memory_pool_bytes
+    labels:
+      pool: $1
+      type: $2
+    help: "JVM memory pool usage"
+    type: GAUGE
+
+  # ── JVM GC ────────────────────────────────────────────────────────────────────
+  - pattern: "java\\.lang<type=GarbageCollector, name=(.+)><>(CollectionCount|CollectionTime)"
+    name: jvm_gc_$2_total
+    labels:
+      gc: $1
+    help: "JVM GC $2"
+    type: COUNTER
+
+  # ── JVM Threads ───────────────────────────────────────────────────────────────
+  - pattern: "java\\.lang<type=Threading><>(ThreadCount|DaemonThreadCount|PeakThreadCount)"
+    name: jvm_threads_$1
+    help: "JVM thread count"
+    type: GAUGE
+
+  # ── JVM OS ────────────────────────────────────────────────────────────────────
+  - pattern: "java\\.lang<type=OperatingSystem><>(OpenFileDescriptorCount|MaxFileDescriptorCount|SystemCpuLoad|ProcessCpuLoad)"
+    name: jvm_os_$1
+    help: "JVM OS metric $1"
+    type: GAUGE
+
+  # ── JVM ClassLoader ───────────────────────────────────────────────────────────
+  - pattern: "java\\.lang<type=ClassLoading><>(LoadedClassCount|UnloadedClassCount)"
+    name: jvm_classloading_$1
+    help: "JVM class loading"
+    type: GAUGE

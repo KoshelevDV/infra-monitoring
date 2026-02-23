@@ -1,0 +1,21 @@
+---
+- name: Deploy postgres_exporter
+  hosts: postgresql
+  become: true
+  roles:
+    - node-exporter
+    - postgres-exporter
+
+- name: Deploy mysqld_exporter
+  hosts: mysql
+  become: true
+  roles:
+    - node-exporter
+    - mysql-exporter
+
+- name: Deploy sql_exporter (MSSQL)
+  hosts: mssql
+  become: true
+  roles:
+    - node-exporter
+    - mssql-exporter

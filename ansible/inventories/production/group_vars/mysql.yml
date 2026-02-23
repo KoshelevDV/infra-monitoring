@@ -1,0 +1,5 @@
+---
+mysql_exporter_version: "0.15.1"
+mysql_exporter_port: 9104
+# mysql_exporter_user: exporter
+# mysql_exporter_password: ""

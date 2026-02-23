@@ -1,0 +1,60 @@
+---
+- name: Create kafka-exporter system user
+  ansible.builtin.user:
+    name: "{{ kafka_exporter_user }}"
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+
+- name: Check installed kafka_exporter version
+  ansible.builtin.command: "{{ exporter_bin_dir }}/kafka_exporter --version"
+  register: kafka_exporter_installed
+  changed_when: false
+  failed_when: false
+
+- name: Download kafka_exporter
+  ansible.builtin.get_url:
+    url: "https://github.com/danielqsj/kafka_exporter/releases/download/v{{ kafka_exporter_version }}/kafka_exporter-{{ kafka_exporter_version }}.{{ exporter_arch }}.tar.gz"
+    dest: "/tmp/kafka_exporter-{{ kafka_exporter_version }}.tar.gz"
+    mode: "0644"
+  when: >
+    kafka_exporter_installed.rc != 0 or
+    kafka_exporter_version not in kafka_exporter_installed.stdout
+
+- name: Extract kafka_exporter
+  ansible.builtin.unarchive:
+    src: "/tmp/kafka_exporter-{{ kafka_exporter_version }}.tar.gz"
+    dest: /tmp
+    remote_src: true
+  when: >
+    kafka_exporter_installed.rc != 0 or
+    kafka_exporter_version not in kafka_exporter_installed.stdout
+
+- name: Install kafka_exporter binary
+  ansible.builtin.copy:
+    src: "/tmp/kafka_exporter-{{ kafka_exporter_version }}.{{ exporter_arch }}/kafka_exporter"
+    dest: "{{ exporter_bin_dir }}/kafka_exporter"
+    owner: root
+    mode: "0755"
+    remote_src: true
+  notify: Restart kafka-exporter
+  when: >
+    kafka_exporter_installed.rc != 0 or
+    kafka_exporter_version not in kafka_exporter_installed.stdout
+
+- name: Deploy kafka-exporter systemd service
+  ansible.builtin.template:
+    src: kafka-exporter.service.j2
+    dest: /etc/systemd/system/kafka-exporter.service
+    owner: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart kafka-exporter
+
+- name: Enable and start kafka-exporter
+  ansible.builtin.systemd:
+    name: kafka-exporter
+    enabled: true
+    state: started
+    daemon_reload: true

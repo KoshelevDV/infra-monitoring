@@ -1,0 +1,14 @@
+---
+# Shared variables for all hosts
+
+# Prometheus exporters listen address
+exporter_listen_address: "0.0.0.0"
+
+# Where to install exporter binaries
+exporter_bin_dir: /usr/local/bin
+
+# Where to store exporter configs and queries
+exporter_config_dir: /etc/prometheus-exporters
+
+# Architecture (override per host if needed)
+exporter_arch: "linux-amd64"

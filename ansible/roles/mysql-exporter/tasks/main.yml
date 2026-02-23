@@ -1,0 +1,84 @@
+---
+- name: Create mysql-exporter system user
+  ansible.builtin.user:
+    name: "{{ mysql_exporter_user }}"
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+
+- name: Create config directory
+  ansible.builtin.file:
+    path: "{{ exporter_config_dir }}/mysql-exporter"
+    state: directory
+    owner: "{{ mysql_exporter_user }}"
+    mode: "0750"
+
+- name: Check installed mysqld_exporter version
+  ansible.builtin.command: "{{ exporter_bin_dir }}/mysqld_exporter --version"
+  register: mysql_exporter_installed
+  changed_when: false
+  failed_when: false
+
+- name: Download mysqld_exporter
+  ansible.builtin.get_url:
+    url: "https://github.com/prometheus/mysqld_exporter/releases/download/v{{ mysql_exporter_version }}/mysqld_exporter-{{ mysql_exporter_version }}.{{ exporter_arch }}.tar.gz"
+    dest: "/tmp/mysqld_exporter-{{ mysql_exporter_version }}.tar.gz"
+    mode: "0644"
+  when: >
+    mysql_exporter_installed.rc != 0 or
+    mysql_exporter_version not in mysql_exporter_installed.stdout
+
+- name: Extract and install mysqld_exporter
+  ansible.builtin.unarchive:
+    src: "/tmp/mysqld_exporter-{{ mysql_exporter_version }}.tar.gz"
+    dest: /tmp
+    remote_src: true
+  when: >
+    mysql_exporter_installed.rc != 0 or
+    mysql_exporter_version not in mysql_exporter_installed.stdout
+
+- name: Install mysqld_exporter binary
+  ansible.builtin.copy:
+    src: "/tmp/mysqld_exporter-{{ mysql_exporter_version }}.{{ exporter_arch }}/mysqld_exporter"
+    dest: "{{ exporter_bin_dir }}/mysqld_exporter"
+    owner: root
+    mode: "0755"
+    remote_src: true
+  notify: Restart mysql-exporter
+  when: >
+    mysql_exporter_installed.rc != 0 or
+    mysql_exporter_version not in mysql_exporter_installed.stdout
+
+- name: Deploy .my.cnf credentials file
+  ansible.builtin.template:
+    src: my.cnf.j2
+    dest: "{{ exporter_config_dir }}/mysql-exporter/.my.cnf"
+    owner: "{{ mysql_exporter_user }}"
+    mode: "0600"
+  notify: Restart mysql-exporter
+
+- name: Deploy mysql-exporter systemd service
+  ansible.builtin.template:
+    src: mysql-exporter.service.j2
+    dest: /etc/systemd/system/mysql-exporter.service
+    owner: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart mysql-exporter
+
+- name: Enable and start mysql-exporter
+  ansible.builtin.systemd:
+    name: mysql-exporter
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Create MySQL exporter user (if local MySQL)
+  community.mysql.mysql_user:
+    name: "{{ mysql_exporter_db_user }}"
+    password: "{{ mysql_exporter_db_password }}"
+    priv: "*.*:PROCESS,REPLICATION CLIENT,SELECT"
+    host: "{{ mysql_exporter_db_host }}"
+    state: present
+  ignore_errors: true  # Skip if remote MySQL or no Python mysql driver

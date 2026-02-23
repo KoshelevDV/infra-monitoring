@@ -1,0 +1,6 @@
+---
+jmx_exporter_version: "1.0.1"
+jmx_exporter_port: 5556
+jmx_exporter_jar_dir: /opt/jmx-exporter
+# jmx_exporter_app_service: myapp   — systemd service to restart when config changes
+# jmx_exporter_app_env_file: /etc/myapp/env  — file to add JVM_OPTS to

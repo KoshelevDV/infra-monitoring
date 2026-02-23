@@ -1,0 +1,25 @@
+[Unit]
+Description=Prometheus node_exporter
+Documentation=https://github.com/prometheus/node_exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User={{ node_exporter_user }}
+Group={{ node_exporter_user }}
+Type=simple
+ExecStart={{ exporter_bin_dir }}/node_exporter \
+    --web.listen-address={{ exporter_listen_address }}:{{ node_exporter_port }} \
+    {{ node_exporter_extra_args }}
+Restart=on-failure
+RestartSec=5s
+SyslogIdentifier=node-exporter
+
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

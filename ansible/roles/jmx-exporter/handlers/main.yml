@@ -1,0 +1,6 @@
+---
+- name: Restart application service
+  ansible.builtin.systemd:
+    name: "{{ jmx_exporter_app_service }}"
+    state: restarted
+  when: jmx_exporter_app_service is defined

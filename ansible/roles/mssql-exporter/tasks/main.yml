@@ -1,0 +1,75 @@
+---
+- name: Create mssql-exporter system user
+  ansible.builtin.user:
+    name: "{{ mssql_exporter_user }}"
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+
+- name: Create config directory
+  ansible.builtin.file:
+    path: "{{ exporter_config_dir }}/mssql-exporter"
+    state: directory
+    owner: "{{ mssql_exporter_user }}"
+    mode: "0750"
+
+- name: Check installed sql_exporter version
+  ansible.builtin.command: "{{ exporter_bin_dir }}/sql_exporter --version"
+  register: sql_exporter_installed
+  changed_when: false
+  failed_when: false
+
+- name: Download sql_exporter
+  ansible.builtin.get_url:
+    url: "https://github.com/burningalchemist/sql_exporter/releases/download/{{ sql_exporter_version }}/sql_exporter-{{ sql_exporter_version }}.{{ exporter_arch }}.tar.gz"
+    dest: "/tmp/sql_exporter-{{ sql_exporter_version }}.tar.gz"
+    mode: "0644"
+  when: >
+    sql_exporter_installed.rc != 0 or
+    sql_exporter_version not in sql_exporter_installed.stdout
+
+- name: Extract sql_exporter
+  ansible.builtin.unarchive:
+    src: "/tmp/sql_exporter-{{ sql_exporter_version }}.tar.gz"
+    dest: /tmp
+    remote_src: true
+  when: >
+    sql_exporter_installed.rc != 0 or
+    sql_exporter_version not in sql_exporter_installed.stdout
+
+- name: Install sql_exporter binary
+  ansible.builtin.copy:
+    src: "/tmp/sql_exporter-{{ sql_exporter_version }}.{{ exporter_arch }}/sql_exporter"
+    dest: "{{ exporter_bin_dir }}/sql_exporter"
+    owner: root
+    mode: "0755"
+    remote_src: true
+  notify: Restart mssql-exporter
+  when: >
+    sql_exporter_installed.rc != 0 or
+    sql_exporter_version not in sql_exporter_installed.stdout
+
+- name: Deploy sql_exporter config
+  ansible.builtin.template:
+    src: sql_exporter.yml.j2
+    dest: "{{ exporter_config_dir }}/mssql-exporter/sql_exporter.yml"
+    owner: "{{ mssql_exporter_user }}"
+    mode: "0640"
+  notify: Restart mssql-exporter
+
+- name: Deploy mssql-exporter systemd service
+  ansible.builtin.template:
+    src: mssql-exporter.service.j2
+    dest: /etc/systemd/system/mssql-exporter.service
+    owner: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart mssql-exporter
+
+- name: Enable and start mssql-exporter
+  ansible.builtin.systemd:
+    name: mssql-exporter
+    enabled: true
+    state: started
+    daemon_reload: true

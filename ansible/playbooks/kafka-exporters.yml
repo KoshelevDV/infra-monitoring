@@ -1,0 +1,13 @@
+---
+- name: Deploy kafka_exporter on Kafka brokers
+  hosts: kafka
+  become: true
+  roles:
+    - node-exporter
+    - kafka-exporter
+
+- name: Deploy jmx_exporter on JVM applications
+  hosts: jvm_apps
+  become: true
+  roles:
+    - jmx-exporter

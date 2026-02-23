@@ -1,0 +1,120 @@
+# Custom queries for postgres_exporter
+# Critical for Debezium / WAL accumulation monitoring
+
+# ── Replication Slots (Debezium WAL lag) ──────────────────────────────────────
+pg_replication_slots:
+  query: |
+    SELECT
+      slot_name,
+      slot_type,
+      active::int                                                        AS active,
+      pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn)       AS pg_wal_lsn_diff,
+      pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)               AS restart_lag_bytes
+    FROM pg_replication_slots
+    WHERE slot_type = 'logical'
+  metrics:
+    - slot_name:
+        usage: LABEL
+        description: "Replication slot name"
+    - slot_type:
+        usage: LABEL
+        description: "Slot type (logical/physical)"
+    - active:
+        usage: GAUGE
+        description: "1 if slot is currently being consumed, 0 if inactive"
+    - pg_wal_lsn_diff:
+        usage: GAUGE
+        description: "Bytes of WAL between confirmed_flush_lsn and current WAL position"
+    - restart_lag_bytes:
+        usage: GAUGE
+        description: "Bytes of WAL between restart_lsn and current WAL position (total WAL held)"
+
+# ── Replication streaming (replica lag) ──────────────────────────────────────
+pg_replication_lag:
+  query: |
+    SELECT
+      application_name,
+      COALESCE(EXTRACT(EPOCH FROM (now() - pg_last_xact_replay_timestamp())), 0) AS lag_seconds
+    FROM pg_stat_replication
+  master: true
+  metrics:
+    - application_name:
+        usage: LABEL
+    - lag_seconds:
+        usage: GAUGE
+        description: "Replication lag in seconds"
+
+# ── Long-running queries ─────────────────────────────────────────────────────
+pg_long_running_queries:
+  query: |
+    SELECT
+      usename    AS username,
+      state,
+      MAX(EXTRACT(EPOCH FROM (now() - query_start))) AS max_duration_seconds
+    FROM pg_stat_activity
+    WHERE state != 'idle'
+      AND query_start IS NOT NULL
+      AND now() - query_start > interval '30 seconds'
+    GROUP BY usename, state
+  metrics:
+    - username:
+        usage: LABEL
+    - state:
+        usage: LABEL
+    - max_duration_seconds:
+        usage: GAUGE
+        description: "Max duration of long-running query in seconds"
+
+# ── Table bloat (dead tuples) ─────────────────────────────────────────────────
+pg_table_bloat:
+  query: |
+    SELECT
+      schemaname,
+      relname AS tablename,
+      n_dead_tup,
+      n_live_tup,
+      CASE WHEN (n_live_tup + n_dead_tup) > 0
+           THEN round(n_dead_tup::numeric / (n_live_tup + n_dead_tup), 4)
+           ELSE 0
+      END AS dead_ratio
+    FROM pg_stat_user_tables
+    WHERE n_dead_tup > 10000
+  metrics:
+    - schemaname:
+        usage: LABEL
+    - tablename:
+        usage: LABEL
+    - n_dead_tup:
+        usage: GAUGE
+        description: "Number of dead tuples"
+    - n_live_tup:
+        usage: GAUGE
+        description: "Number of live tuples"
+    - dead_ratio:
+        usage: GAUGE
+        description: "Ratio of dead to total tuples (0-1)"
+
+# ── Autovacuum activity ───────────────────────────────────────────────────────
+pg_autovacuum:
+  query: |
+    SELECT
+      schemaname,
+      relname AS tablename,
+      last_vacuum,
+      last_autovacuum,
+      last_analyze,
+      last_autoanalyze,
+      vacuum_count,
+      autovacuum_count
+    FROM pg_stat_user_tables
+  metrics:
+    - schemaname:
+        usage: LABEL
+    - tablename:
+        usage: LABEL
+    - vacuum_count:
+        usage: COUNTER
+        description: "Number of manual VACUUMs"
+    - autovacuum_count:
+        usage: COUNTER
+        description: "Number of autovacuum runs"

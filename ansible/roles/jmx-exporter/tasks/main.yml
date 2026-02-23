@@ -1,0 +1,39 @@
+---
+- name: Create jmx-exporter directory
+  ansible.builtin.file:
+    path: "{{ jmx_exporter_jar_dir }}"
+    state: directory
+    owner: root
+    mode: "0755"
+
+- name: Check if jmx_prometheus_javaagent.jar exists
+  ansible.builtin.stat:
+    path: "{{ jmx_exporter_jar_dir }}/jmx_prometheus_javaagent-{{ jmx_exporter_version }}.jar"
+  register: jmx_jar
+
+- name: Download jmx_prometheus_javaagent.jar
+  ansible.builtin.get_url:
+    url: "https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/{{ jmx_exporter_version }}/jmx_prometheus_javaagent-{{ jmx_exporter_version }}.jar"
+    dest: "{{ jmx_exporter_jar_dir }}/jmx_prometheus_javaagent-{{ jmx_exporter_version }}.jar"
+    mode: "0644"
+  when: not jmx_jar.stat.exists
+
+- name: Symlink to current version
+  ansible.builtin.file:
+    src: "{{ jmx_exporter_jar_dir }}/jmx_prometheus_javaagent-{{ jmx_exporter_version }}.jar"
+    dest: "{{ jmx_exporter_jar_dir }}/jmx_prometheus_javaagent.jar"
+    state: link
+
+- name: Deploy jmx_exporter config
+  ansible.builtin.template:
+    src: jmx-config.yml.j2
+    dest: "{{ jmx_exporter_jar_dir }}/config.yml"
+    owner: root
+    mode: "0644"
+  notify: Restart application service
+
+- name: Show JVM agent argument to add to application
+  ansible.builtin.debug:
+    msg: >
+      Add to your JVM startup args:
+      -javaagent:{{ jmx_exporter_jar_dir }}/jmx_prometheus_javaagent.jar={{ jmx_exporter_port }}:{{ jmx_exporter_jar_dir }}/config.yml

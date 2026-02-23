@@ -1,0 +1,7 @@
+---
+mysql_exporter_version: "0.15.1"
+mysql_exporter_port: 9104
+mysql_exporter_user: mysql-exporter
+mysql_exporter_db_user: exporter
+mysql_exporter_db_password: "secret"
+mysql_exporter_db_host: "localhost"

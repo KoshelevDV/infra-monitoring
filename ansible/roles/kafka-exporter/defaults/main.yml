@@ -1,0 +1,9 @@
+---
+kafka_exporter_version: "1.7.0"
+kafka_exporter_port: 9308
+kafka_exporter_user: kafka-exporter
+# Comma-separated brokers — override per host
+kafka_brokers:
+  - "localhost:9092"
+kafka_sasl_enabled: false
+kafka_tls_enabled: false

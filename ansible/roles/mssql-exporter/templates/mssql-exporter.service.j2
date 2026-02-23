@@ -1,0 +1,22 @@
+[Unit]
+Description=Prometheus sql_exporter (MSSQL)
+Documentation=https://github.com/burningalchemist/sql_exporter
+After=network-online.target
+
+[Service]
+User={{ mssql_exporter_user }}
+Group={{ mssql_exporter_user }}
+Type=simple
+ExecStart={{ exporter_bin_dir }}/sql_exporter \
+    --config.file={{ exporter_config_dir }}/mssql-exporter/sql_exporter.yml \
+    --web.listen-address={{ exporter_listen_address }}:{{ mssql_exporter_port }}
+Restart=on-failure
+RestartSec=10s
+SyslogIdentifier=mssql-exporter
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

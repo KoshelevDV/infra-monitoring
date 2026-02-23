@@ -1,48 +1,105 @@
 # Ansible — Exporter Deployment
 
-This directory contains Ansible playbooks for deploying Prometheus exporters
-to the monitored infrastructure.
+Deploys Prometheus exporters to monitored infrastructure (Ubuntu 22.04).
 
-## Structure
+## Roles
 
+| Role | Exporter | Port | Notes |
+|------|----------|------|-------|
+| `node-exporter` | node_exporter v1.8.2 | 9100 | All VMs |
+| `postgres-exporter` | postgres_exporter v0.15.0 | 9187 | Includes **custom queries** for replication slots (Debezium WAL) |
+| `mysql-exporter` | mysqld_exporter v0.15.1 | 9104 | Creates `.my.cnf` credentials |
+| `mssql-exporter` | sql_exporter v0.14.3 | 9399 | YAML query config |
+| `kafka-exporter` | kafka_exporter v1.7.0 | 9308 | SASL/TLS optional |
+| `jmx-exporter` | jmx_prometheus_javaagent v1.0.1 | 5556 | Java agent JAR, JVM + Debezium metrics |
+
+## Prerequisites
+
+```bash
+# Install required Ansible collections
+ansible-galaxy collection install community.general community.mysql
 ```
-ansible/
-├── inventories/
-│   └── production/
-│       ├── hosts.yml          — inventory: VMs, DB hosts, Kafka brokers
-│       └── group_vars/
-│           ├── all.yml        — shared vars
-│           ├── postgresql.yml — postgres_exporter config
-│           ├── mysql.yml
-│           ├── mssql.yml
-│           └── kafka.yml
-├── roles/
-│   ├── node-exporter/         — node_exporter on all VMs
-│   ├── postgres-exporter/     — postgres_exporter on PG hosts
-│   ├── mysql-exporter/        — mysqld_exporter
-│   ├── mssql-exporter/        — sql_exporter
-│   ├── kafka-exporter/        — kafka_exporter on Kafka brokers
-│   └── jmx-exporter/         — jmx_exporter java agent on JVM apps
-└── playbooks/
-    ├── deploy-exporters.yml   — deploy all exporters
-    ├── node-exporter.yml
-    ├── db-exporters.yml
-    └── kafka-exporters.yml
+
+## Configuration
+
+### 1. Fill in your hosts
+
+Edit `inventories/production/hosts.yml` — uncomment and fill in your IPs:
+
+```yaml
+postgresql:
+  hosts:
+    pg-primary:
+      ansible_host: 10.0.1.10
+      postgres_exporter_dsn: "postgresql://exporter:secret@localhost/postgres?sslmode=disable"
 ```
+
+### 2. Set per-group variables
+
+`inventories/production/group_vars/postgresql.yml` — PostgreSQL settings
+`inventories/production/group_vars/mysql.yml` — MySQL settings
 
 ## Usage
 
 ```bash
-# Deploy all exporters
+# Deploy everything
 ansible-playbook -i inventories/production playbooks/deploy-exporters.yml
 
-# Deploy only node exporters
+# Only node exporters (all hosts)
 ansible-playbook -i inventories/production playbooks/node-exporter.yml
 
-# Dry run
-ansible-playbook -i inventories/production playbooks/deploy-exporters.yml --check
+# Database exporters only
+ansible-playbook -i inventories/production playbooks/db-exporters.yml
+
+# Kafka + JVM exporters
+ansible-playbook -i inventories/production playbooks/kafka-exporters.yml
+
+# Dry run (check mode)
+ansible-playbook -i inventories/production playbooks/deploy-exporters.yml --check --diff
+
+# Only specific hosts
+ansible-playbook -i inventories/production playbooks/db-exporters.yml \
+  --limit pg-primary
+
+# Check connectivity first
+ansible -i inventories/production all -m ping
 ```
 
-## Adding a new host
+## PostgreSQL — create exporter user manually
 
-Edit `inventories/production/hosts.yml` and re-run the relevant playbook.
+```sql
+CREATE USER exporter WITH PASSWORD 'your-password';
+GRANT pg_monitor TO exporter;
+GRANT CONNECT ON DATABASE postgres TO exporter;
+```
+
+## MySQL — create exporter user manually
+
+```sql
+CREATE USER 'exporter'@'localhost' IDENTIFIED BY 'your-password';
+GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+## JVM — add agent to application startup
+
+After deploying jmx-exporter, add this to your application's JVM args:
+
+```
+-javaagent:/opt/jmx-exporter/jmx_prometheus_javaagent.jar=5556:/opt/jmx-exporter/config.yml
+```
+
+For systemd services, add to `Environment=` or `EnvironmentFile=`:
+```
+JAVA_OPTS=-javaagent:/opt/jmx-exporter/jmx_prometheus_javaagent.jar=5556:/opt/jmx-exporter/config.yml
+```
+
+## After deploying exporters
+
+Add the new hosts to `victoria-metrics/scrape.yml` and reload:
+
+```bash
+docker compose restart victoria-metrics
+# or if using hot-reload (30s interval):
+# just wait, it picks up changes automatically
+```

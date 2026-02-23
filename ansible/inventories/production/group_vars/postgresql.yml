@@ -1,0 +1,9 @@
+---
+postgres_exporter_version: "0.15.0"
+postgres_exporter_port: 9187
+
+# DATA_SOURCE_NAME — override per host in hosts.yml if different DSN per instance
+# postgres_exporter_dsn: "postgresql://exporter:password@localhost/postgres?sslmode=disable"
+
+# Enable custom queries (pg_replication_slots for Debezium WAL monitoring)
+postgres_exporter_custom_queries: true

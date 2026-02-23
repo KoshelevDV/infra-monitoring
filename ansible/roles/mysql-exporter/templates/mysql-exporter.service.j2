@@ -1,0 +1,28 @@
+[Unit]
+Description=Prometheus mysqld_exporter
+Documentation=https://github.com/prometheus/mysqld_exporter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User={{ mysql_exporter_user }}
+Group={{ mysql_exporter_user }}
+Type=simple
+ExecStart={{ exporter_bin_dir }}/mysqld_exporter \
+    --config.my-cnf={{ exporter_config_dir }}/mysql-exporter/.my.cnf \
+    --web.listen-address={{ exporter_listen_address }}:{{ mysql_exporter_port }} \
+    --collect.info_schema.innodb_metrics \
+    --collect.info_schema.tables \
+    --collect.slave_status \
+    --collect.slave_hosts
+Restart=on-failure
+RestartSec=10s
+SyslogIdentifier=mysql-exporter
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

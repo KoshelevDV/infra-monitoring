@@ -1,0 +1,7 @@
+---
+sql_exporter_version: "0.14.3"
+mssql_exporter_port: 9399
+mssql_exporter_user: mssql-exporter
+# Override per host in hosts.yml:
+# mssql_dsn: "sqlserver://exporter:password@localhost:1433?database=master"
+mssql_dsn: "sqlserver://exporter:secret@localhost:1433?database=master"
