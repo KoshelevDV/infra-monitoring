@@ -1,0 +1,119 @@
+# values-vmks.yaml — Overrides for victoria-metrics-k8s-stack
+#
+# Usage:
+#   helm repo add vm https://victoriametrics.github.io/helm-charts/
+#   helm repo update
+#   helm install vmks vm/victoria-metrics-k8s-stack \
+#     -n monitoring --create-namespace \
+#     -f helm/infra-monitoring/values-vmks.yaml
+#
+# Then install kafka-connect-exporter:
+#   helm install infra-monitoring ./helm/infra-monitoring \
+#     -n monitoring \
+#     --set kafkaConnectExporter.connectUrls="http://kafka-connect.kafka:8083"
+
+# ─── VictoriaMetrics ────────────────────────────────────────────────────────
+
+victoria-metrics-single:
+  enabled: false  # use vmcluster for HA
+
+vmcluster:
+  enabled: true
+  spec:
+    retentionPeriod: "90"
+    vmstorage:
+      replicaCount: 2
+      storage:
+        volumeClaimTemplate:
+          spec:
+            resources:
+              requests:
+                storage: 50Gi
+    vmselect:
+      replicaCount: 2
+    vminsert:
+      replicaCount: 2
+
+# ─── VMAgent (scraping) ─────────────────────────────────────────────────────
+
+vmagent:
+  enabled: true
+  spec:
+    scrapeInterval: 30s
+    externalLabels:
+      cluster: production
+    # Additional scrape configs (static targets, bare-metal exporters)
+    additionalScrapeConfigs:
+      name: infra-monitoring-extra-scrape
+      key: scrape.yml
+    # To add static targets, create a Secret:
+    # kubectl create secret generic infra-monitoring-extra-scrape \
+    #   --from-file=scrape.yml=victoria-metrics/scrape.yml \
+    #   -n monitoring
+
+# ─── VMAlert ────────────────────────────────────────────────────────────────
+
+vmalert:
+  enabled: true
+  spec:
+    evaluationInterval: 30s
+    # Alert rules are loaded from ConfigMaps with label: managed-by: vm-operator
+    # Create via:
+    # kubectl create configmap infra-alerts-kafka \
+    #   --from-file=kafka-debezium.yml=alerts/kafka-debezium.yml \
+    #   -n monitoring
+    # kubectl label configmap infra-alerts-kafka managed-by=vm-operator -n monitoring
+    ruleSelector:
+      matchLabels:
+        managed-by: vm-operator
+    notifier:
+      url: "http://vmalertmanager-vmks:9093"
+
+# ─── Alertmanager ───────────────────────────────────────────────────────────
+
+alertmanager:
+  enabled: true
+  spec:
+    # Mount custom alertmanager.yml via Secret:
+    # kubectl create secret generic alertmanager-config \
+    #   --from-file=alertmanager.yml=alertmanager/alertmanager.yml \
+    #   -n monitoring
+    configSecret: alertmanager-config
+
+# ─── Grafana ────────────────────────────────────────────────────────────────
+
+grafana:
+  enabled: true
+  adminPassword: changeme  # override in production!
+  ingress:
+    enabled: false
+    ingressClassName: nginx
+    hosts:
+      - grafana.example.com
+    tls: []
+  persistence:
+    enabled: true
+    size: 5Gi
+  # Datasource auto-provisioned by vmks pointing to vmcluster
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+
+# ─── Built-in exporters ─────────────────────────────────────────────────────
+
+# node-exporter is deployed by Ansible on bare-metal VMs (see ansible/)
+# Enable here only for K8s nodes
+prometheus-node-exporter:
+  enabled: true
+
+kube-state-metrics:
+  enabled: true
+
+# ─── CRD / RBAC ─────────────────────────────────────────────────────────────
+
+victoria-metrics-operator:
+  enabled: true
+  operator:
+    # Auto-discover VMServiceScrape resources cluster-wide
+    watchNamespaces: []

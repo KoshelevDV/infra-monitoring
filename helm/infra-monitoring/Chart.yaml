@@ -1,16 +1,18 @@
 apiVersion: v2
 name: infra-monitoring
-description: Production monitoring stack — VictoriaMetrics, Grafana, Alertmanager, Kafka Connect Exporter
+description: |
+  Kafka Connect exporter (Rust) + VMServiceScrape for VictoriaMetrics Operator.
+  Full monitoring stack is managed via victoria-metrics-k8s-stack (vmks).
+  See values-vmks.yaml for vmks configuration.
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
 keywords:
   - monitoring
-  - prometheus
-  - grafana
+  - kafka-connect
   - victoriametrics
-  - kafka
   - debezium
+  - prometheus
 home: https://github.com/KoshelevDV/infra-monitoring
 maintainers:
   - name: KoshelevDV

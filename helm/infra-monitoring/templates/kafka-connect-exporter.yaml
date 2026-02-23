@@ -17,10 +17,6 @@ spec:
       labels:
         app: kafka-connect-exporter
         instance: {{ .Release.Name }}
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "9407"
-        prometheus.io/path: "/metrics"
     spec:
       {{- with .Values.nodeSelector }}
       nodeSelector: {{- toYaml . | nindent 8 }}
@@ -59,3 +55,24 @@ spec:
     - port: 9407
       targetPort: 9407
       name: metrics
+{{- if .Values.kafkaConnectExporter.vmServiceScrape.enabled }}
+---
+# VMServiceScrape for VictoriaMetrics Operator (vm-operator / vmks)
+# Automatically discovered when victoria-metrics-k8s-stack is installed
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: {{ include "infra-monitoring.fullname" . }}-kafka-connect-exporter
+  labels:
+    {{- include "infra-monitoring.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: kafka-connect-exporter
+      instance: {{ .Release.Name }}
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: {{ .Values.kafkaConnectExporter.vmServiceScrape.interval | default "30s" }}
+      scrapeTimeout: {{ .Values.kafkaConnectExporter.vmServiceScrape.scrapeTimeout | default "10s" }}
+{{- end }}

@@ -64,32 +64,77 @@ docker compose down
 
 ---
 
-## Helm (Kubernetes)
+## Kubernetes — vm-operator (recommended)
 
-Chart lives in `helm/infra-monitoring/` — not published to any registry.
+For Kubernetes deployments we use [victoria-metrics-k8s-stack](https://github.com/VictoriaMetrics/helm-charts/tree/master/charts/victoria-metrics-k8s-stack) (vm-operator) instead of managing VictoriaMetrics manually. The operator manages VictoriaMetrics CRDs (`VMCluster`, `VMAgent`, `VMAlert`, `VMAlertmanager`) and auto-discovers `VMServiceScrape` resources.
 
-```bash
-# Install
-helm install monitoring ./helm/infra-monitoring \
-  --namespace monitoring --create-namespace \
-  --set alertmanager.telegram.botToken=YOUR_BOT_TOKEN \
-  --set alertmanager.telegram.chatId=YOUR_CHAT_ID
-
-# Upgrade
-helm upgrade monitoring ./helm/infra-monitoring
-
-# With custom values file
-helm install monitoring ./helm/infra-monitoring -f my-values.yaml
-```
-
-### Enable Grafana ingress
+### 1. Install victoria-metrics-k8s-stack
 
 ```bash
-helm install monitoring ./helm/infra-monitoring \
-  --set grafana.ingress.enabled=true \
-  --set grafana.ingress.host=grafana.example.com \
-  --set grafana.ingress.className=nginx
+helm repo add vm https://victoriametrics.github.io/helm-charts/
+helm repo update
+
+helm install vmks vm/victoria-metrics-k8s-stack \
+  -n monitoring --create-namespace \
+  -f helm/infra-monitoring/values-vmks.yaml \
+  --set grafana.adminPassword=YOUR_GRAFANA_PASSWORD
 ```
+
+### 2. Load alert rules
+
+```bash
+# Create ConfigMaps with label managed-by=vm-operator — VMAlert picks them up automatically
+for f in alerts/*.yml; do
+  name="infra-alerts-$(basename $f .yml)"
+  kubectl create configmap "$name" --from-file="$(basename $f)"="$f" -n monitoring
+  kubectl label configmap "$name" managed-by=vm-operator -n monitoring
+done
+```
+
+### 3. Load Alertmanager config (Telegram)
+
+```bash
+# Set your Telegram token and chat ID first in alertmanager/alertmanager.yml
+kubectl create secret generic alertmanager-config \
+  --from-file=alertmanager.yml=alertmanager/alertmanager.yml \
+  -n monitoring
+```
+
+### 4. Add static scrape targets (bare-metal VMs, databases)
+
+```bash
+kubectl create secret generic infra-monitoring-extra-scrape \
+  --from-file=scrape.yml=victoria-metrics/scrape.yml \
+  -n monitoring
+```
+
+### 5. Install kafka-connect-exporter
+
+The custom Rust exporter is deployed separately. Its `VMServiceScrape` is auto-discovered by vm-operator.
+
+```bash
+helm install infra-monitoring ./helm/infra-monitoring \
+  -n monitoring \
+  --set kafkaConnectExporter.connectUrls="http://kafka-connect.kafka:8083" \
+  --set kafkaConnectExporter.vmServiceScrape.enabled=true
+```
+
+### Upgrade
+
+```bash
+helm upgrade vmks vm/victoria-metrics-k8s-stack \
+  -n monitoring -f helm/infra-monitoring/values-vmks.yaml
+
+helm upgrade infra-monitoring ./helm/infra-monitoring -n monitoring
+```
+
+### values-vmks.yaml
+
+All vmks overrides are in `helm/infra-monitoring/values-vmks.yaml`:
+- VMCluster with 2 replicas for storage/select/insert
+- VMAgent with static scrape config reference
+- Grafana with persistence + optional ingress
+- Prometheus-node-exporter and kube-state-metrics enabled
 
 ---
 
@@ -273,16 +318,42 @@ docker compose down           # остановить
 
 ---
 
-## Helm
+## Kubernetes — vm-operator (рекомендуется)
 
-Чарт в `helm/infra-monitoring/` — в реестры не публикуется.
+Для K8s используем [victoria-metrics-k8s-stack](https://github.com/VictoriaMetrics/helm-charts/tree/master/charts/victoria-metrics-k8s-stack) — официальный Helm-чарт от VictoriaMetrics с оператором. Он управляет `VMCluster`, `VMAgent`, `VMAlert`, `VMAlertmanager` через CRD и автоматически подхватывает `VMServiceScrape` ресурсы.
 
 ```bash
-helm install monitoring ./helm/infra-monitoring \
-  --namespace monitoring --create-namespace \
-  --set alertmanager.telegram.botToken=TOKEN \
-  --set alertmanager.telegram.chatId=CHAT_ID
+# 1. Установить vmks
+helm repo add vm https://victoriametrics.github.io/helm-charts/
+helm install vmks vm/victoria-metrics-k8s-stack \
+  -n monitoring --create-namespace \
+  -f helm/infra-monitoring/values-vmks.yaml \
+  --set grafana.adminPassword=ПАРОЛЬ
+
+# 2. Загрузить alert rules (VMAlert подхватит автоматически)
+for f in alerts/*.yml; do
+  name="infra-alerts-$(basename $f .yml)"
+  kubectl create configmap "$name" --from-file="$(basename $f)"="$f" -n monitoring
+  kubectl label configmap "$name" managed-by=vm-operator -n monitoring
+done
+
+# 3. Конфиг Alertmanager (Telegram)
+kubectl create secret generic alertmanager-config \
+  --from-file=alertmanager.yml=alertmanager/alertmanager.yml \
+  -n monitoring
+
+# 4. Статические scrape targets (bare-metal ВМ, базы)
+kubectl create secret generic infra-monitoring-extra-scrape \
+  --from-file=scrape.yml=victoria-metrics/scrape.yml \
+  -n monitoring
+
+# 5. Kafka Connect exporter
+helm install infra-monitoring ./helm/infra-monitoring \
+  -n monitoring \
+  --set kafkaConnectExporter.connectUrls="http://kafka-connect.kafka:8083"
 ```
+
+Все оверрайды для vmks — в `helm/infra-monitoring/values-vmks.yaml`.
 
 ---
 
