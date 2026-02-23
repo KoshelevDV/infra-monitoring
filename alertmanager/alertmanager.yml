@@ -1,0 +1,85 @@
+global:
+  resolve_timeout: 5m
+
+# ── Templates ────────────────────────────────────────────────────────────────
+templates:
+  - /etc/alertmanager/templates/*.tmpl
+
+# ── Routing ──────────────────────────────────────────────────────────────────
+route:
+  receiver: telegram-default
+  group_by: [alertname, instance, job]
+  group_wait: 30s        # wait before sending first notification in a group
+  group_interval: 5m     # how long to wait before sending new notifications for a group
+  repeat_interval: 4h    # how long to wait before re-notifying resolved
+
+  routes:
+    # Critical alerts — faster, separate channel
+    - matchers:
+        - severity = critical
+      receiver: telegram-critical
+      group_wait: 10s
+      repeat_interval: 1h
+
+    # Watchdog — send to a separate channel (or /dev/null)
+    - matchers:
+        - alertname = Watchdog
+      receiver: watchdog
+      repeat_interval: 1m
+
+    # Debezium WAL — highest priority, immediate notification
+    - matchers:
+        - alertname =~ "DebeziumWALLag.*|DebeziumSlotInactive.*"
+      receiver: telegram-critical
+      group_wait: 5s
+      repeat_interval: 30m
+
+# ── Inhibition ───────────────────────────────────────────────────────────────
+# If a host is down, suppress all alerts from services on that host
+inhibit_rules:
+  - source_matchers:
+      - alertname = HostDown
+    target_matchers:
+      - severity =~ "warning|critical"
+    equal: [instance]
+
+  # If PostgreSQL is down, suppress WAL/replication alerts for same instance
+  - source_matchers:
+      - alertname = PostgreSQLDown
+    target_matchers:
+      - alertname =~ "DebeziumWALLag.*|DebeziumSlotInactive.*|PostgreSQL.*"
+    equal: [instance]
+
+# ── Receivers ────────────────────────────────────────────────────────────────
+receivers:
+  - name: telegram-default
+    telegram_configs:
+      - bot_token: "${TELEGRAM_BOT_TOKEN}"
+        chat_id: ${TELEGRAM_CHAT_ID}
+        parse_mode: HTML
+        message: |
+          {{ range .Alerts }}
+          {{ if eq .Status "firing" }}🔴{{ else }}✅{{ end }} <b>{{ .Labels.alertname }}</b>
+          {{ if .Labels.instance }}📍 <code>{{ .Labels.instance }}</code>{{ end }}
+          {{ .Annotations.summary }}
+          {{ if .Annotations.description }}<i>{{ .Annotations.description }}</i>{{ end }}
+          {{ end }}
+
+  - name: telegram-critical
+    telegram_configs:
+      - bot_token: "${TELEGRAM_BOT_TOKEN}"
+        chat_id: ${TELEGRAM_CHAT_ID}
+        parse_mode: HTML
+        message: |
+          🚨 <b>CRITICAL ALERT</b>
+          {{ range .Alerts }}
+          ⚠️ <b>{{ .Labels.alertname }}</b>
+          {{ if .Labels.instance }}📍 <code>{{ .Labels.instance }}</code>{{ end }}
+          {{ .Annotations.summary }}
+          {{ if .Annotations.description }}<i>{{ .Annotations.description }}</i>{{ end }}
+          {{ end }}
+
+  - name: watchdog
+    webhook_configs:
+      - url: "http://localhost:9999/watchdog"
+        send_resolved: false

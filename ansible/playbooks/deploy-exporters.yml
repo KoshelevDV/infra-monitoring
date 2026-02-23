@@ -1,0 +1,39 @@
+---
+# Deploy all Prometheus exporters to monitored infrastructure
+# Usage: ansible-playbook -i inventories/production playbooks/deploy-exporters.yml
+
+- name: Deploy node_exporter on all VMs
+  hosts: vms:postgresql:mysql:mssql:kafka:jvm_apps
+  become: true
+  roles:
+    - node-exporter
+
+- name: Deploy postgres_exporter on PostgreSQL hosts
+  hosts: postgresql
+  become: true
+  roles:
+    - postgres-exporter
+
+- name: Deploy mysqld_exporter on MySQL hosts
+  hosts: mysql
+  become: true
+  roles:
+    - mysql-exporter
+
+- name: Deploy sql_exporter on MSSQL hosts
+  hosts: mssql
+  become: true
+  roles:
+    - mssql-exporter
+
+- name: Deploy kafka_exporter on Kafka brokers
+  hosts: kafka
+  become: true
+  roles:
+    - kafka-exporter
+
+- name: Deploy jmx_exporter on JVM applications
+  hosts: jvm_apps
+  become: true
+  roles:
+    - jmx-exporter

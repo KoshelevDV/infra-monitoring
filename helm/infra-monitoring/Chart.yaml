@@ -1,0 +1,16 @@
+apiVersion: v2
+name: infra-monitoring
+description: Production monitoring stack — VictoriaMetrics, Grafana, Alertmanager, Kafka Connect Exporter
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - monitoring
+  - prometheus
+  - grafana
+  - victoriametrics
+  - kafka
+  - debezium
+home: https://github.com/KoshelevDV/infra-monitoring
+maintainers:
+  - name: KoshelevDV

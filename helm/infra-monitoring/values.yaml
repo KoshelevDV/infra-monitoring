@@ -1,0 +1,41 @@
+victoriaMetrics:
+  image: victoriametrics/victoria-metrics:v1.101.0
+  retention: 90d
+  storage: 50Gi
+  resources:
+    limits: { cpu: "2", memory: 2Gi }
+    requests: { cpu: 200m, memory: 512Mi }
+
+grafana:
+  image: grafana/grafana:11.2.0
+  adminUser: admin
+  adminPassword: changeme   # override via --set or secret
+  storage: 5Gi
+  service:
+    type: ClusterIP
+    port: 3000
+  ingress:
+    enabled: false
+    host: grafana.example.com
+    className: nginx
+    tls: false
+
+alertmanager:
+  image: prom/alertmanager:v0.27.0
+  storage: 2Gi
+  telegram:
+    botToken: ""      # required: set via --set alertmanager.telegram.botToken=...
+    chatId: ""        # required: set via --set alertmanager.telegram.chatId=...
+
+kafkaConnectExporter:
+  image: kafka-connect-exporter:latest
+  imagePullPolicy: IfNotPresent
+  connectUrls: "http://kafka-connect:8083"
+  scrapeIntervalSecs: 30
+  resources:
+    limits: { cpu: 200m, memory: 64Mi }
+    requests: { cpu: 50m, memory: 32Mi }
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

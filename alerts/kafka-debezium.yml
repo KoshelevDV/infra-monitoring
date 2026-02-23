@@ -1,0 +1,164 @@
+groups:
+
+  # ── Kafka Connect connector health ────────────────────────────────────────────
+  - name: kafka-connect
+    interval: 30s
+    rules:
+
+      # Connector is in FAILED state
+      - alert: KafkaConnectorFailed
+        expr: kafka_connect_connector_state{state="failed"} == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka Connect connector FAILED: {{ $labels.connector }}"
+          description: |
+            Connector {{ $labels.connector }} on {{ $labels.instance }} is in FAILED state.
+            Check logs: docker logs kafka-connect | grep {{ $labels.connector }}
+
+      # Connector task is in FAILED state
+      - alert: KafkaConnectorTaskFailed
+        expr: kafka_connect_connector_task_state{state="failed"} == 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka Connect task FAILED: {{ $labels.connector }}#{{ $labels.task }}"
+          description: |
+            Task {{ $labels.task }} of connector {{ $labels.connector }} is FAILED.
+            Usually triggers WAL accumulation in PostgreSQL.
+
+      # Connector is PAUSED (may be intentional, but worth knowing)
+      - alert: KafkaConnectorPaused
+        expr: kafka_connect_connector_state{state="paused"} == 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka Connect connector paused: {{ $labels.connector }}"
+          description: "Connector {{ $labels.connector }} has been paused for > 10 minutes."
+
+      # No connectors visible — exporter or Connect is down
+      - alert: KafkaConnectExporterDown
+        expr: absent(kafka_connect_connector_state)
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka Connect exporter is not reporting"
+          description: "Cannot reach kafka-connect-exporter. Either the exporter or all Connect instances are down."
+
+  # ── PostgreSQL WAL accumulation (Debezium replication slots) ──────────────────
+  - name: debezium-wal
+    interval: 60s
+    rules:
+
+      # Slot is inactive but WAL is accumulating — connector stopped consuming
+      - alert: DebeziumSlotInactiveWithLag
+        expr: |
+          pg_replication_slots_pg_wal_lsn_diff > 104857600
+          and pg_replication_slots_active == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Debezium slot inactive with WAL lag: {{ $labels.slot_name }}"
+          description: |
+            Replication slot {{ $labels.slot_name }} on {{ $labels.instance }} is INACTIVE
+            and has accumulated {{ $value | humanize1024 }}B of WAL.
+            PostgreSQL cannot clean WAL until this slot advances.
+            ACTION: Check Debezium connector status. If stuck, restart connector.
+            RISK: Disk may fill up if not resolved.
+
+      # WAL lag warning threshold — connector is running but falling behind
+      - alert: DebeziumWALLagWarning
+        expr: pg_replication_slots_pg_wal_lsn_diff > 1073741824  # 1 GB
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Debezium WAL lag high: {{ $labels.slot_name }} ({{ $value | humanize1024 }}B)"
+          description: |
+            Replication slot {{ $labels.slot_name }} on {{ $labels.instance }}
+            is {{ $value | humanize1024 }}B behind current WAL position.
+            Monitor: could indicate slow consumer or upcoming failure.
+
+      # WAL lag critical — disk risk
+      - alert: DebeziumWALLagCritical
+        expr: pg_replication_slots_pg_wal_lsn_diff > 5368709120  # 5 GB
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Debezium WAL lag CRITICAL: {{ $labels.slot_name }} ({{ $value | humanize1024 }}B)"
+          description: |
+            Replication slot {{ $labels.slot_name }} on {{ $labels.instance }}
+            has {{ $value | humanize1024 }}B of unprocessed WAL.
+            IMMEDIATE ACTION REQUIRED to prevent disk exhaustion.
+
+      # Stale slot — lag growing over time (rate-of-growth alert)
+      - alert: DebeziumWALLagGrowing
+        expr: |
+          increase(pg_replication_slots_pg_wal_lsn_diff[15m]) > 536870912  # grew by 512MB in 15m
+          and pg_replication_slots_active == 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "WAL lag growing fast on slot: {{ $labels.slot_name }}"
+          description: |
+            Slot {{ $labels.slot_name }} grew by {{ $value | humanize1024 }}B in the last 15 minutes.
+            Inactive slot actively accumulating WAL.
+
+  # ── Kafka broker health ───────────────────────────────────────────────────────
+  - name: kafka
+    interval: 30s
+    rules:
+
+      - alert: KafkaBrokerDown
+        expr: absent(kafka_brokers) or kafka_brokers == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka broker(s) not reporting"
+          description: "kafka_exporter cannot reach brokers on {{ $labels.instance }}."
+
+      # Debezium consumer group is lagging — means Debezium is falling behind
+      - alert: DebeziumConsumerGroupLagHigh
+        expr: |
+          sum by (consumergroup, topic) (
+            kafka_consumergroup_lag{consumergroup=~"debezium.*|connect.*"}
+          ) > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Debezium consumer group lag: {{ $labels.consumergroup }}"
+          description: |
+            Consumer group {{ $labels.consumergroup }} is {{ $value }} messages behind
+            on topic {{ $labels.topic }}.
+
+      - alert: DebeziumConsumerGroupLagCritical
+        expr: |
+          sum by (consumergroup, topic) (
+            kafka_consumergroup_lag{consumergroup=~"debezium.*|connect.*"}
+          ) > 100000
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Debezium consumer group lag CRITICAL: {{ $labels.consumergroup }}"
+          description: |
+            Consumer group {{ $labels.consumergroup }} is {{ $value }} messages behind.
+            Debezium is severely delayed — check connector and WAL simultaneously.
+
+      - alert: KafkaUnderReplicatedPartitions
+        expr: kafka_topic_partition_under_replicated_partition > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka under-replicated partitions: {{ $value }}"
+          description: "{{ $value }} partitions are under-replicated on {{ $labels.instance }}."
