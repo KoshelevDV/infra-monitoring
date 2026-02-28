@@ -1,0 +1,65 @@
+################################################################################
+# KRaft mode — managed by Ansible
+# Security: {{ kafka_security_protocol }} / {{ kafka_sasl_mechanism if kafka_security_protocol != 'PLAINTEXT' else 'N/A' }}
+################################################################################
+
+# ── KRaft Identity ────────────────────────────────────────────────────────────
+process.roles=broker,controller
+node.id={{ kafka_node_id }}
+controller.quorum.voters={{ kafka_controller_quorum_voters }}
+
+# ── Listeners ─────────────────────────────────────────────────────────────────
+{% set client_proto = kafka_security_protocol %}
+listener.security.protocol.map=CONTROLLER:PLAINTEXT,CLIENT:{{ client_proto }}
+
+listeners=CONTROLLER://0.0.0.0:{{ kafka_controller_port }},CLIENT://0.0.0.0:{{ kafka_client_port }}
+advertised.listeners=CLIENT://{{ ansible_default_ipv4.address }}:{{ kafka_client_port }}
+
+inter.broker.listener.name=CLIENT
+controller.listener.names=CONTROLLER
+
+# ── SASL ──────────────────────────────────────────────────────────────────────
+{% if kafka_security_protocol != 'PLAINTEXT' %}
+sasl.mechanism.inter.broker.protocol={{ kafka_sasl_mechanism }}
+sasl.enabled.mechanisms={{ kafka_sasl_mechanism }}
+{% endif %}
+
+# ── TLS / SSL ─────────────────────────────────────────────────────────────────
+{% if kafka_security_protocol == 'SASL_SSL' %}
+ssl.keystore.location={{ kafka_tls_dir }}/kafka.keystore.jks
+ssl.keystore.password={{ kafka_ssl_keystore_password }}
+ssl.key.password={{ kafka_ssl_key_password }}
+ssl.truststore.location={{ kafka_tls_dir }}/kafka.truststore.jks
+ssl.truststore.password={{ kafka_ssl_truststore_password }}
+ssl.client.auth=required
+ssl.endpoint.identification.algorithm=
+{% endif %}
+
+# ── Storage ───────────────────────────────────────────────────────────────────
+log.dirs={{ kafka_data_dir }}
+
+# ── Topic defaults ────────────────────────────────────────────────────────────
+num.partitions={{ kafka_num_partitions }}
+default.replication.factor={{ kafka_default_replication_factor }}
+min.insync.replicas={{ kafka_min_insync_replicas }}
+auto.create.topics.enable={{ kafka_auto_create_topics | lower }}
+delete.topic.enable={{ kafka_delete_topic_enable | lower }}
+
+# ── Log retention ─────────────────────────────────────────────────────────────
+log.retention.hours={{ kafka_log_retention_hours }}
+log.segment.bytes={{ kafka_log_segment_bytes }}
+log.retention.bytes={{ kafka_log_retention_bytes }}
+log.retention.check.interval.ms=300000
+
+# ── Network ───────────────────────────────────────────────────────────────────
+num.network.threads={{ kafka_num_network_threads }}
+num.io.threads={{ kafka_num_io_threads }}
+socket.send.buffer.bytes={{ kafka_socket_send_buffer_bytes }}
+socket.receive.buffer.bytes={{ kafka_socket_receive_buffer_bytes }}
+socket.request.max.bytes={{ kafka_socket_request_max_bytes }}
+
+# ── Internal ──────────────────────────────────────────────────────────────────
+offsets.topic.replication.factor={{ [kafka_default_replication_factor, 1] | max }}
+transaction.state.log.replication.factor={{ [kafka_default_replication_factor, 1] | max }}
+transaction.state.log.min.isr={{ kafka_min_insync_replicas }}
+group.initial.rebalance.delay.ms=0

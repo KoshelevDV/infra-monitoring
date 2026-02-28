@@ -1,0 +1,30 @@
+[Unit]
+Description=Apache Kafka (KRaft)
+Documentation=https://kafka.apache.org/documentation/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ kafka_user }}
+Group={{ kafka_group }}
+
+EnvironmentFile={{ kafka_config_dir }}/kafka-env.sh
+
+ExecStart={{ kafka_install_dir }}/bin/kafka-server-start.sh \
+  {{ kafka_config_dir }}/server.properties
+
+ExecStop={{ kafka_install_dir }}/bin/kafka-server-stop.sh
+
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=90
+TimeoutStopSec=30
+
+LimitNOFILE=65536
+
+StandardOutput=append:{{ kafka_log_dir }}/kafka.log
+StandardError=append:{{ kafka_log_dir }}/kafka.log
+
+[Install]
+WantedBy=multi-user.target

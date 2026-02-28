@@ -1,0 +1,20 @@
+---
+# group_vars для Kafka HA кластера (KRaft, 3 ноды)
+# ОБЯЗАТЕЛЬНО заполнить перед деплоем:
+
+# Сгенерировать один раз: bin/kafka-storage.sh random-uuid
+kafka_cluster_id: ""   # например: "MkU3OEVBNTcwNTJENDM2Qk"
+
+# Перечислить все ноды кластера (node_id@host:port)
+kafka_controller_quorum_voters: "1@10.0.0.51:9093,2@10.0.0.52:9093,3@10.0.0.53:9093"
+
+# HA настройки
+kafka_default_replication_factor: 3
+kafka_min_insync_replicas: 2
+kafka_num_partitions: 3
+kafka_auto_create_topics: false
+kafka_heap_size: "2g"
+
+# Безопасность (переопределить по необходимости)
+kafka_security_protocol: PLAINTEXT
+kafka_sasl_mechanism: SCRAM-SHA-512

@@ -1,0 +1,66 @@
+---
+kafka_version: "3.8.1"
+kafka_scala_version: "2.13"
+
+kafka_user: kafka
+kafka_group: kafka
+
+kafka_install_dir: /opt/kafka
+kafka_data_dir: /var/lib/kafka/data
+kafka_log_dir: /var/log/kafka
+kafka_config_dir: /etc/kafka
+kafka_tls_dir: /etc/kafka/tls
+
+kafka_client_port: 9092
+kafka_controller_port: 9093
+
+# node.id ОБЯЗАТЕЛЬНО задавать в host_vars! (уникальный int per node)
+kafka_node_id: 1
+
+# Cluster ID — ОБЯЗАТЕЛЬНО одинаковый для всех нод, задать в group_vars!
+kafka_cluster_id: ""
+
+# KRaft voters — перечислить все ноды кластера в group_vars:
+# kafka_controller_quorum_voters: "1@10.0.0.1:9093,2@10.0.0.2:9093,3@10.0.0.3:9093"
+kafka_controller_quorum_voters: ""
+
+kafka_heap_size: "2g"
+kafka_jvm_opts: >-
+  -XX:+UseG1GC
+  -XX:MaxGCPauseMillis=20
+  -XX:InitiatingHeapOccupancyPercent=35
+  -XX:+ExplicitGCInvokesConcurrent
+  -Djava.awt.headless=true
+
+# ─── БЕЗОПАСНОСТЬ ─────────────────────────────────────────────────────────────
+kafka_security_protocol: PLAINTEXT   # PLAINTEXT | SASL_PLAINTEXT | SASL_SSL
+kafka_sasl_mechanism: SCRAM-SHA-512  # PLAIN | SCRAM-SHA-256 | SCRAM-SHA-512
+
+kafka_users: []
+kafka_broker_username: broker
+kafka_broker_password: ""
+
+kafka_ssl_keystore_src: ""
+kafka_ssl_truststore_src: ""
+kafka_ssl_keystore_password: ""
+kafka_ssl_truststore_password: ""
+kafka_ssl_key_password: ""
+
+# ─── HA настройки брокера ─────────────────────────────────────────────────────
+kafka_num_partitions: 3
+kafka_default_replication_factor: 3   # RF=3 для 3-нодового кластера
+kafka_min_insync_replicas: 2          # запись подтверждается 2 из 3 реплик
+kafka_log_retention_hours: 168
+kafka_log_segment_bytes: 1073741824
+kafka_log_retention_bytes: -1
+kafka_auto_create_topics: false       # в prod лучше false
+kafka_delete_topic_enable: true
+
+kafka_socket_send_buffer_bytes: 102400
+kafka_socket_receive_buffer_bytes: 102400
+kafka_socket_request_max_bytes: 104857600
+kafka_num_network_threads: 8          # больше потоков для кластера
+kafka_num_io_threads: 16
+
+kafka_jmx_enabled: true
+kafka_jmx_port: 9999

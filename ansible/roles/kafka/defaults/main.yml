@@ -1,0 +1,90 @@
+---
+kafka_version: "3.8.1"
+kafka_scala_version: "2.13"
+
+kafka_user: kafka
+kafka_group: kafka
+
+# Пути
+kafka_install_dir: /opt/kafka
+kafka_data_dir: /var/lib/kafka/data
+kafka_log_dir: /var/log/kafka
+kafka_config_dir: /etc/kafka
+
+# Порты
+kafka_client_port: 9092        # клиентский (PLAINTEXT / SASL_PLAINTEXT / SASL_SSL)
+kafka_controller_port: 9093    # внутренний KRaft controller (всегда PLAINTEXT между контроллерами)
+
+# KRaft: node.id (single = 1, для HA — задавать host_vars)
+kafka_node_id: 1
+
+# Cluster ID — если пустой, генерируется автоматически при первом запуске
+# В HA ОБЯЗАТЕЛЬНО задать одинаковый для всех нод через group_vars!
+kafka_cluster_id: ""
+
+# KRaft controller quorum — для single устанавливается автоматически
+# Для HA задавать явно в group_vars:
+#   kafka_controller_quorum_voters: "1@10.0.0.1:9093,2@10.0.0.2:9093,3@10.0.0.3:9093"
+kafka_controller_quorum_voters: "{{ kafka_node_id }}@{{ ansible_default_ipv4.address }}:{{ kafka_controller_port }}"
+
+# JVM
+kafka_heap_size: "1g"
+kafka_jvm_opts: >-
+  -XX:+UseG1GC
+  -XX:MaxGCPauseMillis=20
+  -XX:InitiatingHeapOccupancyPercent=35
+  -XX:+ExplicitGCInvokesConcurrent
+  -Djava.awt.headless=true
+
+# ─── БЕЗОПАСНОСТЬ ──────────────────────────────────────────────────────────────
+#
+# Режим: PLAINTEXT | SASL_PLAINTEXT | SASL_SSL
+kafka_security_protocol: PLAINTEXT
+
+# SASL механизм: PLAIN | SCRAM-SHA-256 | SCRAM-SHA-512
+# Используется только когда kafka_security_protocol != PLAINTEXT
+kafka_sasl_mechanism: SCRAM-SHA-512
+
+# Пользователи для SASL
+# Формат: { username: "...", password: "..." }
+# Для PLAIN — прописываются в JAAS config
+# Для SCRAM — создаются через kafka-configs.sh после старта
+kafka_users: []
+  # - username: admin
+  #   password: "{{ vault_kafka_admin_password }}"
+  # - username: producer
+  #   password: "{{ vault_kafka_producer_password }}"
+
+# Пользователь-брокер (для inter-broker auth при SASL)
+kafka_broker_username: broker
+kafka_broker_password: ""  # задать через ansible-vault / extra-vars!
+
+# ─── TLS (только для SASL_SSL) ────────────────────────────────────────────────
+# Пути к файлам на control node — они будут скопированы на целевой хост
+kafka_tls_dir: /etc/kafka/tls
+kafka_ssl_keystore_src: ""       # путь к keystore на control node
+kafka_ssl_truststore_src: ""     # путь к truststore на control node
+kafka_ssl_keystore_password: ""
+kafka_ssl_truststore_password: ""
+kafka_ssl_key_password: ""
+
+# ─── Дефолтные настройки брокера ─────────────────────────────────────────────
+kafka_num_partitions: 1
+kafka_default_replication_factor: 1
+kafka_min_insync_replicas: 1
+kafka_log_retention_hours: 168    # 7 дней
+kafka_log_segment_bytes: 1073741824
+kafka_log_retention_bytes: -1     # без ограничения
+kafka_auto_create_topics: true
+kafka_delete_topic_enable: true
+
+# Лимиты
+kafka_socket_send_buffer_bytes: 102400
+kafka_socket_receive_buffer_bytes: 102400
+kafka_socket_request_max_bytes: 104857600
+kafka_num_network_threads: 3
+kafka_num_io_threads: 8
+
+# Метрики JMX (для JMX exporter)
+kafka_jmx_enabled: true
+kafka_jmx_port: 9999

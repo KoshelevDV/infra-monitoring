@@ -1,0 +1,42 @@
+---
+# kafka_ha переиспользует задачи и шаблоны из роли kafka.
+# Разница только в defaults (RF=3, min_isr=2, num_network_threads=8 и т.д.)
+# и в group_vars (kafka_controller_quorum_voters, kafka_cluster_id, kafka_node_id).
+
+- name: Validate HA configuration
+  ansible.builtin.assert:
+    that:
+      - kafka_controller_quorum_voters != ""
+      - kafka_cluster_id != ""
+    fail_msg: >
+      kafka_ha требует явного задания в group_vars:
+        kafka_cluster_id: "<UUID>"
+        kafka_controller_quorum_voters: "1@10.0.0.1:9093,2@10.0.0.2:9093,3@10.0.0.3:9093"
+      Сгенерировать cluster_id: bin/kafka-storage.sh random-uuid
+
+- name: Install Kafka (reuse kafka role tasks)
+  ansible.builtin.include_role:
+    name: kafka
+    tasks_from: install.yml
+
+- name: Configure Kafka broker (reuse kafka role tasks)
+  ansible.builtin.include_role:
+    name: kafka
+    tasks_from: configure.yml
+
+- name: Create SASL users (reuse kafka role tasks)
+  ansible.builtin.include_role:
+    name: kafka
+    tasks_from: users.yml
+  when: kafka_security_protocol != 'PLAINTEXT'
+
+- name: Allow kafka controller port in UFW (HA inter-node)
+  community.general.ufw:
+    rule: allow
+    port: "{{ kafka_controller_port }}"
+    proto: tcp
+    src: "{{ item }}"
+    comment: "Kafka KRaft controller (internal)"
+  loop: "{{ ansible_play_hosts | map('extract', hostvars, ['ansible_default_ipv4', 'address']) | list }}"
+  when: ansible_facts.services['ufw.service'] is defined
+  ignore_errors: true

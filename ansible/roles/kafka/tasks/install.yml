@@ -1,0 +1,81 @@
+---
+- name: Install Java (OpenJDK 21)
+  ansible.builtin.package:
+    name: openjdk-21-jre-headless
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Install Java (RHEL/Rocky)
+  ansible.builtin.package:
+    name: java-21-openjdk-headless
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Create kafka group
+  ansible.builtin.group:
+    name: "{{ kafka_group }}"
+    system: true
+
+- name: Create kafka user
+  ansible.builtin.user:
+    name: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+    home: "{{ kafka_install_dir }}"
+
+- name: Create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    mode: "0750"
+  loop:
+    - "{{ kafka_install_dir }}"
+    - "{{ kafka_data_dir }}"
+    - "{{ kafka_log_dir }}"
+    - "{{ kafka_config_dir }}"
+    - "{{ kafka_tls_dir }}"
+
+- name: Check installed kafka version
+  ansible.builtin.stat:
+    path: "{{ kafka_install_dir }}/libs/kafka-clients-{{ kafka_version }}.jar"
+  register: kafka_jar
+
+- name: Download Kafka
+  ansible.builtin.get_url:
+    url: "https://downloads.apache.org/kafka/{{ kafka_version }}/kafka_{{ kafka_scala_version }}-{{ kafka_version }}.tgz"
+    dest: "/tmp/kafka_{{ kafka_scala_version }}-{{ kafka_version }}.tgz"
+    mode: "0644"
+  when: not kafka_jar.stat.exists
+
+- name: Extract Kafka
+  ansible.builtin.unarchive:
+    src: "/tmp/kafka_{{ kafka_scala_version }}-{{ kafka_version }}.tgz"
+    dest: /tmp
+    remote_src: true
+  when: not kafka_jar.stat.exists
+
+- name: Sync Kafka files to install dir
+  ansible.posix.synchronize:
+    src: "/tmp/kafka_{{ kafka_scala_version }}-{{ kafka_version }}/"
+    dest: "{{ kafka_install_dir }}/"
+    delete: false
+  delegate_to: "{{ inventory_hostname }}"
+  when: not kafka_jar.stat.exists
+
+- name: Fix permissions on install dir
+  ansible.builtin.file:
+    path: "{{ kafka_install_dir }}"
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    recurse: true
+
+- name: Create kafka symlink /usr/local/kafka
+  ansible.builtin.file:
+    src: "{{ kafka_install_dir }}"
+    dest: /usr/local/kafka
+    state: link
+    force: true

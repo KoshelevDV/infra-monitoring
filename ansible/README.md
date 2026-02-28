@@ -160,3 +160,83 @@ ansible-playbook playbooks/vault-init.yml -i inventories/production/hosts.yml -l
 - `playbooks/vault-keys/` добавлен в `.gitignore` — **никогда не коммить unseal keys**
 - Root token использовать только при начальной конфигурации
 - Для пользователей — `no_log: true` везде где пароли
+
+---
+
+## Apache Kafka (KRaft)
+
+Роли для деплоя Kafka без ZooKeeper (KRaft mode, Kafka 3.x+).
+
+### Роли
+
+| Роль | Назначение |
+|------|-----------|
+| `kafka` | Single-node Kafka (KRaft combined: broker+controller) |
+| `kafka_ha` | HA кластер (3+ нод, KRaft, RF=3, min_isr=2) |
+
+### Режимы безопасности
+
+| `kafka_security_protocol` | `kafka_sasl_mechanism` | Что получаем |
+|--------------------------|----------------------|--------------|
+| `PLAINTEXT` | — | Без аутентификации, без TLS |
+| `SASL_PLAINTEXT` | `PLAIN` | Логин+пароль в JAAS (статически) |
+| `SASL_PLAINTEXT` | `SCRAM-SHA-512` | Логин+пароль через SCRAM (динамически) |
+| `SASL_SSL` | `SCRAM-SHA-512` | Логин+пароль + TLS сертификат |
+
+### Быстрый старт — single node
+
+```bash
+# Без auth
+ansible-playbook playbooks/kafka-single.yml -i inventories/production/hosts.yml -l kafka_single
+
+# SASL/SCRAM (рекомендуется для prod)
+ansible-playbook playbooks/kafka-single.yml -i inventories/production/hosts.yml -l kafka_single \
+  -e kafka_security_protocol=SASL_PLAINTEXT \
+  -e kafka_sasl_mechanism=SCRAM-SHA-512 \
+  -e kafka_broker_password=BrokerPass123 \
+  -e 'kafka_users=[{"username":"producer","password":"Prod123"},{"username":"consumer","password":"Cons123"}]'
+
+# SASL + TLS
+ansible-playbook playbooks/kafka-single.yml -i inventories/production/hosts.yml -l kafka_single \
+  -e kafka_security_protocol=SASL_SSL \
+  -e kafka_ssl_keystore_src=files/kafka.keystore.jks \
+  -e kafka_ssl_keystore_password=keystorepass \
+  -e kafka_ssl_truststore_src=files/kafka.truststore.jks \
+  -e kafka_ssl_truststore_password=truststorepass
+```
+
+### Быстрый старт — HA кластер
+
+```bash
+# 1. Сгенерировать cluster_id (один раз):
+#    bin/kafka-storage.sh random-uuid  → вставить в group_vars/kafka_ha.yml
+
+# 2. Заполнить group_vars/kafka_ha.yml (cluster_id + quorum_voters)
+#    и host_vars/<node>.yml (kafka_node_id: 1/2/3)
+
+# 3. Деплой
+ansible-playbook playbooks/kafka-ha.yml -i inventories/production/hosts.yml -l kafka_ha
+```
+
+### Пользователи (SCRAM)
+
+При SCRAM-SHA-512 пользователи создаются через `kafka-configs.sh` после старта брокера.
+`kafka_users` — список `{username, password}` в group_vars или extra-vars.
+Брокерский пользователь (`kafka_broker_username`) создаётся отдельно для inter-broker auth.
+
+### TLS — генерация сертификатов
+
+```bash
+# Корневой CA
+openssl genrsa -out ca.key 4096
+openssl req -new -x509 -days 3650 -key ca.key -out ca.crt -subj "/CN=KafkaCA"
+
+# Keystore для каждой ноды
+keytool -genkey -keyalg RSA -alias kafka -keystore kafka.keystore.jks \
+  -storepass changeit -keypass changeit -validity 365 \
+  -dname "CN=kafka-01, OU=Kafka, O=MyOrg" \
+  -ext "SAN=ip:10.0.0.51,dns:kafka-01"
+
+# Подписать сертификат CA и импортировать
+# (полная инструкция: kafka.apache.org/documentation/#security_ssl)
+```

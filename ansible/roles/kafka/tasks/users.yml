@@ -1,0 +1,43 @@
+---
+# Создание SCRAM-пользователей через kafka-configs.sh
+# Для PLAIN-механизма пользователи задаются в JAAS config — этот файл не нужен
+# Для SCRAM-SHA-256/512 — создаём через kafka-configs.sh
+
+- name: Wait for Kafka to be up (port check)
+  ansible.builtin.wait_for:
+    host: "127.0.0.1"
+    port: "{{ kafka_client_port }}"
+    delay: 5
+    timeout: 60
+  when: kafka_sasl_mechanism in ['SCRAM-SHA-256', 'SCRAM-SHA-512']
+
+- name: Create broker SCRAM user
+  ansible.builtin.command:
+    cmd: >
+      {{ kafka_install_dir }}/bin/kafka-configs.sh
+      --bootstrap-server 127.0.0.1:{{ kafka_client_port }}
+      --alter
+      --add-config 'SCRAM-SHA-256=[password={{ kafka_broker_password }}],SCRAM-SHA-512=[password={{ kafka_broker_password }}]'
+      --entity-type users
+      --entity-name {{ kafka_broker_username }}
+  become_user: "{{ kafka_user }}"
+  changed_when: false
+  no_log: true
+  when:
+    - kafka_sasl_mechanism in ['SCRAM-SHA-256', 'SCRAM-SHA-512']
+    - kafka_broker_password != ""
+
+- name: Create SCRAM users
+  ansible.builtin.command:
+    cmd: >
+      {{ kafka_install_dir }}/bin/kafka-configs.sh
+      --bootstrap-server 127.0.0.1:{{ kafka_client_port }}
+      --alter
+      --add-config '{{ kafka_sasl_mechanism }}=[password={{ item.password }}]'
+      --entity-type users
+      --entity-name {{ item.username }}
+  become_user: "{{ kafka_user }}"
+  loop: "{{ kafka_users }}"
+  changed_when: false
+  no_log: true
+  when: kafka_sasl_mechanism in ['SCRAM-SHA-256', 'SCRAM-SHA-512']

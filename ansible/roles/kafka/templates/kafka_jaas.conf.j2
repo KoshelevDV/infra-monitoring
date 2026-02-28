@@ -1,0 +1,38 @@
+// JAAS config — managed by Ansible
+// Security: {{ kafka_security_protocol }} / {{ kafka_sasl_mechanism }}
+
+{% if kafka_sasl_mechanism == 'PLAIN' %}
+// ── PLAIN: все пользователи задаются статически ────────────────────────────
+KafkaServer {
+    org.apache.kafka.common.security.plain.PlainLoginModule required
+    username="{{ kafka_broker_username }}"
+    password="{{ kafka_broker_password }}"
+    user_{{ kafka_broker_username }}="{{ kafka_broker_password }}"
+{% for user in kafka_users %}
+    user_{{ user.username }}="{{ user.password }}"
+{% endfor %}
+    ;
+};
+
+KafkaClient {
+    org.apache.kafka.common.security.plain.PlainLoginModule required
+    username="{{ kafka_broker_username }}"
+    password="{{ kafka_broker_password }}";
+};
+
+{% elif kafka_sasl_mechanism in ['SCRAM-SHA-256', 'SCRAM-SHA-512'] %}
+// ── SCRAM: broker credentials в JAAS, пользователи создаются kafka-configs ─
+{% set scram_class = 'ScramLoginModule' %}
+KafkaServer {
+    org.apache.kafka.common.security.scram.ScramLoginModule required
+    username="{{ kafka_broker_username }}"
+    password="{{ kafka_broker_password }}";
+};
+
+KafkaClient {
+    org.apache.kafka.common.security.scram.ScramLoginModule required
+    username="{{ kafka_broker_username }}"
+    password="{{ kafka_broker_password }}";
+};
+
+{% endif %}

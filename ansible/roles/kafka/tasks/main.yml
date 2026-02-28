@@ -1,0 +1,10 @@
+---
+- name: Install and configure Kafka (KRaft, single node)
+  ansible.builtin.include_tasks: install.yml
+
+- name: Configure Kafka broker
+  ansible.builtin.include_tasks: configure.yml
+
+- name: Create SASL users
+  ansible.builtin.include_tasks: users.yml
+  when: kafka_security_protocol != 'PLAINTEXT'
