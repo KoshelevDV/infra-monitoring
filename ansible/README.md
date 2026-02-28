@@ -103,3 +103,60 @@ docker compose restart victoria-metrics
 # or if using hot-reload (30s interval):
 # just wait, it picks up changes automatically
 ```
+
+---
+
+## HashiCorp Vault
+
+Роли для деплоя, инициализации и конфигурации HashiCorp Vault.
+
+### Роли
+
+| Роль | Назначение |
+|------|-----------|
+| `vault` | Single-node Vault (file storage, systemd, TLS опционально) |
+| `vault_ha` | HA Vault кластер на Raft (3+ нод) |
+| `vault_unseal` | Init + unseal (сохраняет ключи на control node) |
+| `vault_configure` | Policies, auth methods (K8s, AppRole, JWT, Userpass), secret engines (KV, DB, PKI) |
+
+### Быстрый старт — single node
+
+```bash
+# 1. Добавить хост в hosts.yml → vault_single
+
+# 2. Установить Vault
+ansible-playbook playbooks/vault-single.yml -i inventories/production/hosts.yml -l vault_single
+
+# 3. Инициализировать и unseal
+ansible-playbook playbooks/vault-init.yml -i inventories/production/hosts.yml -l vault_single
+# Ключи сохраняются в playbooks/vault-keys/ — держи в секрете!
+
+# 4. Базовая конфигурация (KV, userpass admin)
+ansible-playbook playbooks/vault-configure.yml -i inventories/production/hosts.yml \
+  -l vault_single --extra-vars "vault_root_token=s.XXXX"
+```
+
+### Быстрый старт — HA (Raft, 3 ноды)
+
+```bash
+# 1. Добавить 3 хоста в hosts.yml → vault_ha
+# 2. Задать vault_raft_peers в group_vars/vault_ha.yml
+
+# 3. Установить на все ноды
+ansible-playbook playbooks/vault-ha.yml -i inventories/production/hosts.yml -l vault_ha
+
+# 4. Init + unseal первой ноды, потом остальных
+ansible-playbook playbooks/vault-init.yml -i inventories/production/hosts.yml -l vault_ha[0]
+ansible-playbook playbooks/vault-init.yml -i inventories/production/hosts.yml -l vault_ha
+```
+
+### Unseal опции
+
+По умолчанию ключи читаются из `playbooks/vault-keys/<hostname>-vault-keys.json`.
+В продакшене замени на AWS KMS/GCP KMS через `vault_ha` конфиг (`seal "awskms" {}`).
+
+### ⚠️ Безопасность
+
+- `playbooks/vault-keys/` добавлен в `.gitignore` — **никогда не коммить unseal keys**
+- Root token использовать только при начальной конфигурации
+- Для пользователей — `no_log: true` везде где пароли

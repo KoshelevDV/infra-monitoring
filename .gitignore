@@ -1,2 +1,6 @@
 .env
 target/
+
+# HashiCorp Vault unseal keys (NEVER commit!)
+ansible/playbooks/vault-keys/
+vault-keys/

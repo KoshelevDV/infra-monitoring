@@ -1,0 +1,113 @@
+---
+- name: Set VAULT_ADDR env
+  ansible.builtin.set_fact:
+    vault_env:
+      VAULT_ADDR: "{{ vault_api_addr }}"
+      VAULT_SKIP_VERIFY: "{{ 'true' if not vault_tls_enabled else 'false' }}"
+
+- name: Wait for vault to be reachable
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/health"
+    method: GET
+    status_code: [200, 429, 472, 473, 501, 503]
+    validate_certs: "{{ vault_tls_enabled }}"
+  register: vault_health
+  retries: 15
+  delay: 5
+  until: vault_health.status in [200, 429, 472, 473, 501, 503]
+
+- name: Check vault init status
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/init"
+    method: GET
+    validate_certs: "{{ vault_tls_enabled }}"
+  register: vault_init_status
+
+- name: Create output directory for vault keys (control node)
+  ansible.builtin.file:
+    path: "{{ vault_keys_output_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  run_once: true
+  when: not vault_init_status.json.initialized
+
+- name: Initialize vault
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/init"
+    method: POST
+    body_format: json
+    body:
+      secret_shares: "{{ vault_init_key_shares }}"
+      secret_threshold: "{{ vault_init_key_threshold }}"
+    validate_certs: "{{ vault_tls_enabled }}"
+  register: vault_init_result
+  when: not vault_init_status.json.initialized
+
+- name: Save vault keys to control node (SENSITIVE — chmod 600!)
+  ansible.builtin.copy:
+    content: "{{ vault_init_result.json | to_nice_json }}"
+    dest: "{{ vault_keys_file }}"
+    mode: "0600"
+  delegate_to: localhost
+  when: not vault_init_status.json.initialized
+  no_log: true
+
+- name: Show vault root token location
+  ansible.builtin.debug:
+    msg: "Vault initialized! Keys saved to {{ vault_keys_file }} on control node. KEEP SAFE."
+  when: not vault_init_status.json.initialized
+
+- name: Check vault seal status
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/seal-status"
+    method: GET
+    validate_certs: "{{ vault_tls_enabled }}"
+  register: vault_seal_status
+
+- name: Load keys from file (control node)
+  ansible.builtin.set_fact:
+    vault_loaded_keys: "{{ lookup('file', vault_keys_file) | from_json }}"
+  delegate_to: localhost
+  when:
+    - vault_seal_status.json.sealed
+    - vault_read_keys_from_file
+
+- name: Unseal vault with keys from file
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/unseal"
+    method: POST
+    body_format: json
+    body:
+      key: "{{ vault_loaded_keys.keys[item] }}"
+    validate_certs: "{{ vault_tls_enabled }}"
+  loop: "{{ range(0, vault_unseal_key_count) | list }}"
+  when:
+    - vault_seal_status.json.sealed
+    - vault_read_keys_from_file
+  no_log: true
+
+- name: Unseal vault with explicit keys
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/unseal"
+    method: POST
+    body_format: json
+    body:
+      key: "{{ item }}"
+    validate_certs: "{{ vault_tls_enabled }}"
+  loop: "{{ vault_unseal_keys }}"
+  when:
+    - vault_seal_status.json.sealed
+    - not vault_read_keys_from_file
+  no_log: true
+
+- name: Verify vault is unsealed
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/seal-status"
+    method: GET
+    validate_certs: "{{ vault_tls_enabled }}"
+  register: vault_final_status
+
+- name: Report vault status
+  ansible.builtin.debug:
+    msg: "Vault sealed: {{ vault_final_status.json.sealed }} | HA: {{ vault_final_status.json.ha_enabled | default(false) }}"

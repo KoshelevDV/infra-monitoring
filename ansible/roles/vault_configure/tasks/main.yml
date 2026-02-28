@@ -1,0 +1,292 @@
+---
+- name: Set vault headers
+  ansible.builtin.set_fact:
+    vault_headers:
+      X-Vault-Token: "{{ vault_root_token }}"
+
+# ── KV Secret Engines ──────────────────────────────────────────────────────────
+
+- name: Enable KV secret engines
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/mounts/{{ item.path }}"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      type: kv
+      description: "{{ item.description | default('KV secrets engine') }}"
+      options:
+        version: "{{ item.version | default(2) | string }}"
+    status_code: [200, 204, 400]  # 400 = already mounted
+    validate_certs: "{{ vault_tls_enabled }}"
+  loop: "{{ vault_kv_engines }}"
+
+# ── Policies ──────────────────────────────────────────────────────────────────
+
+- name: Create vault policies
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/policies/acl/{{ item.name }}"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      policy: "{{ item.rules }}"
+    status_code: [200, 204]
+    validate_certs: "{{ vault_tls_enabled }}"
+  loop: "{{ vault_policies }}"
+
+# ── Kubernetes Auth ───────────────────────────────────────────────────────────
+
+- name: Enable Kubernetes auth method
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/auth/kubernetes"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      type: kubernetes
+    status_code: [200, 204, 400]
+    validate_certs: "{{ vault_tls_enabled }}"
+  when: vault_auth_kubernetes_enabled
+
+- name: Configure Kubernetes auth method
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/auth/kubernetes/config"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      kubernetes_host: "{{ vault_auth_kubernetes_host }}"
+      kubernetes_ca_cert: "{{ vault_auth_kubernetes_ca_cert }}"
+      token_reviewer_jwt: "{{ vault_auth_kubernetes_token_reviewer_jwt }}"
+    status_code: [200, 204]
+    validate_certs: "{{ vault_tls_enabled }}"
+  when: vault_auth_kubernetes_enabled
+
+- name: Create Kubernetes auth roles
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/auth/kubernetes/role/{{ item.name }}"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      bound_service_account_names: "{{ item.bound_service_account_names }}"
+      bound_service_account_namespaces: "{{ item.bound_service_account_namespaces }}"
+      policies: "{{ item.policies }}"
+      ttl: "{{ item.ttl | default('1h') }}"
+    status_code: [200, 204]
+    validate_certs: "{{ vault_tls_enabled }}"
+  loop: "{{ vault_auth_kubernetes_roles }}"
+  when: vault_auth_kubernetes_enabled
+
+# ── AppRole Auth ──────────────────────────────────────────────────────────────
+
+- name: Enable AppRole auth method
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/auth/approle"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      type: approle
+    status_code: [200, 204, 400]
+    validate_certs: "{{ vault_tls_enabled }}"
+  when: vault_auth_approle_enabled
+
+- name: Create AppRoles
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/auth/approle/role/{{ item.name }}"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      policies: "{{ item.policies }}"
+      secret_id_ttl: "{{ item.secret_id_ttl | default('0') }}"
+      secret_id_num_uses: "{{ item.secret_id_num_uses | default(0) }}"
+      token_ttl: "{{ item.token_ttl | default('1h') }}"
+      token_max_ttl: "{{ item.token_max_ttl | default('4h') }}"
+    status_code: [200, 204]
+    validate_certs: "{{ vault_tls_enabled }}"
+  loop: "{{ vault_approles }}"
+  when: vault_auth_approle_enabled
+
+- name: Fetch AppRole role-ids
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/auth/approle/role/{{ item.name }}/role-id"
+    method: GET
+    headers: "{{ vault_headers }}"
+    validate_certs: "{{ vault_tls_enabled }}"
+  register: approle_ids
+  loop: "{{ vault_approles }}"
+  when: vault_auth_approle_enabled
+
+- name: Show AppRole role-ids
+  ansible.builtin.debug:
+    msg: "AppRole '{{ item.item.name }}' role_id: {{ item.json.data.role_id }}"
+  loop: "{{ approle_ids.results }}"
+  when: vault_auth_approle_enabled and approle_ids.results is defined
+
+# ── JWT Auth ──────────────────────────────────────────────────────────────────
+
+- name: Enable JWT auth method
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/auth/jwt"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      type: jwt
+    status_code: [200, 204, 400]
+    validate_certs: "{{ vault_tls_enabled }}"
+  when: vault_auth_jwt_enabled
+
+- name: Configure JWT auth method
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/auth/jwt/config"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      oidc_discovery_url: "{{ vault_auth_jwt_oidc_discovery_url }}"
+      default_role: "{{ vault_auth_jwt_roles[0].name | default('') }}"
+    status_code: [200, 204]
+    validate_certs: "{{ vault_tls_enabled }}"
+  when: vault_auth_jwt_enabled and vault_auth_jwt_oidc_discovery_url != ""
+
+- name: Create JWT roles
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/auth/jwt/role/{{ item.name }}"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body: "{{ item }}"
+    status_code: [200, 204]
+    validate_certs: "{{ vault_tls_enabled }}"
+  loop: "{{ vault_auth_jwt_roles }}"
+  when: vault_auth_jwt_enabled
+
+# ── Userpass Auth ─────────────────────────────────────────────────────────────
+
+- name: Enable userpass auth method
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/auth/userpass"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      type: userpass
+    status_code: [200, 204, 400]
+    validate_certs: "{{ vault_tls_enabled }}"
+  when: vault_auth_userpass_enabled
+
+- name: Create userpass users
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/auth/userpass/users/{{ item.username }}"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      password: "{{ item.password }}"
+      policies: "{{ item.policies | join(',') }}"
+    status_code: [200, 204]
+    validate_certs: "{{ vault_tls_enabled }}"
+  loop: "{{ vault_userpass_users }}"
+  when: vault_auth_userpass_enabled
+  no_log: true
+
+# ── Database Secret Engine ────────────────────────────────────────────────────
+
+- name: Enable database secret engine
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/mounts/database"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      type: database
+    status_code: [200, 204, 400]
+    validate_certs: "{{ vault_tls_enabled }}"
+  when: vault_database_enabled
+
+- name: Configure database connections
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/database/config/{{ item.name }}"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      plugin_name: "{{ item.plugin }}"
+      connection_url: "{{ item.connection_url }}"
+      allowed_roles: "{{ item.allowed_roles }}"
+      username: "{{ item.username }}"
+      password: "{{ item.password }}"
+    status_code: [200, 204]
+    validate_certs: "{{ vault_tls_enabled }}"
+  loop: "{{ vault_database_connections }}"
+  when: vault_database_enabled
+  no_log: true
+
+- name: Create database roles
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/database/roles/{{ role.name }}"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      db_name: "{{ item.name }}"
+      creation_statements: "{{ role.creation_statements }}"
+      default_ttl: "{{ role.default_ttl | default('1h') }}"
+      max_ttl: "{{ role.max_ttl | default('24h') }}"
+    status_code: [200, 204]
+    validate_certs: "{{ vault_tls_enabled }}"
+  loop: "{{ vault_database_connections }}"
+  loop_control:
+    loop_var: item
+  vars:
+    role: "{{ item.roles | first }}"
+  when:
+    - vault_database_enabled
+    - item.roles is defined and item.roles | length > 0
+  no_log: true
+
+# ── PKI Secret Engine ─────────────────────────────────────────────────────────
+
+- name: Enable PKI secret engine
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/mounts/{{ vault_pki_mount }}"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      type: pki
+      config:
+        max_lease_ttl: "{{ vault_pki_max_lease_ttl }}"
+    status_code: [200, 204, 400]
+    validate_certs: "{{ vault_tls_enabled }}"
+  when: vault_pki_enabled
+
+- name: Generate PKI root certificate
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/{{ vault_pki_mount }}/root/generate/internal"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body:
+      common_name: "{{ vault_pki_common_name }}"
+      ttl: "{{ vault_pki_max_lease_ttl }}"
+    status_code: [200, 204]
+    validate_certs: "{{ vault_tls_enabled }}"
+  register: pki_root
+  when: vault_pki_enabled
+
+- name: Create PKI roles
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/{{ vault_pki_mount }}/roles/{{ item.name }}"
+    method: POST
+    headers: "{{ vault_headers }}"
+    body_format: json
+    body: "{{ item }}"
+    status_code: [200, 204]
+    validate_certs: "{{ vault_tls_enabled }}"
+  loop: "{{ vault_pki_roles }}"
+  when: vault_pki_enabled

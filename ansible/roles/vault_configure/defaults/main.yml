@@ -1,0 +1,74 @@
+---
+vault_api_addr: "http://127.0.0.1:8200"
+vault_tls_enabled: false
+
+# Root token или bootstrap token — передавать через --extra-vars или vault
+vault_root_token: ""
+
+# KV secret engines для активации
+# Формат: { path: "secret", version: 2, description: "KV v2" }
+vault_kv_engines: []
+
+# Policies
+# Формат: { name: "myapp", rules: "path \"secret/data/myapp/*\" { capabilities = [\"read\"] }" }
+vault_policies: []
+
+# Kubernetes auth method
+vault_auth_kubernetes_enabled: false
+vault_auth_kubernetes_host: ""       # https://kubernetes.default.svc
+vault_auth_kubernetes_ca_cert: ""    # base64 CA cert
+vault_auth_kubernetes_token_reviewer_jwt: ""
+vault_auth_kubernetes_roles: []
+# Формат роли:
+#   - name: myapp
+#     bound_service_account_names: [myapp-sa]
+#     bound_service_account_namespaces: [production]
+#     policies: [myapp]
+#     ttl: 1h
+
+# AppRole auth method
+vault_auth_approle_enabled: false
+vault_approles: []
+# Формат:
+#   - name: ci-deployer
+#     policies: [deploy]
+#     secret_id_ttl: 10m
+#     secret_id_num_uses: 1
+#     token_ttl: 20m
+#     token_max_ttl: 30m
+
+# JWT/OIDC auth method (например, GitLab CI)
+vault_auth_jwt_enabled: false
+vault_auth_jwt_oidc_discovery_url: ""
+vault_auth_jwt_roles: []
+
+# Userpass auth method
+vault_auth_userpass_enabled: false
+vault_userpass_users: []
+# Формат:
+#   - username: devops-admin
+#     password: "{{ vault_devops_admin_password }}"   # из ansible vault!
+#     policies: [admin]
+
+# Database secret engine
+vault_database_enabled: false
+vault_database_connections: []
+# Формат:
+#   - name: mypostgres
+#     plugin: postgresql-database-plugin
+#     connection_url: "postgresql://{{username}}:{{password}}@db:5432/mydb"
+#     allowed_roles: [myapp-role]
+#     username: vault
+#     password: vaultpassword
+#     roles:
+#       - name: myapp-role
+#         creation_statements: "CREATE ROLE ..."
+#         default_ttl: 1h
+#         max_ttl: 24h
+
+# PKI secret engine
+vault_pki_enabled: false
+vault_pki_mount: pki
+vault_pki_max_lease_ttl: 87600h  # 10 years
+vault_pki_common_name: "My Root CA"
+vault_pki_roles: []

@@ -1,0 +1,50 @@
+ui            = {{ vault_ui_enabled | lower }}
+log_level     = "{{ vault_log_level }}"
+disable_mlock = {{ vault_disable_mlock | lower }}
+api_addr      = "{{ vault_api_addr }}"
+cluster_addr  = "{{ vault_cluster_addr }}"
+
+storage "raft" {
+  path    = "{{ vault_data_dir }}"
+  node_id = "{{ inventory_hostname }}"
+
+{% for peer in vault_raft_peers %}
+  retry_join {
+    leader_api_addr = "{{ peer.leader_api_addr }}"
+{% if vault_tls_enabled %}
+    leader_ca_cert_file  = "{{ vault_tls_dir }}/ca.crt"
+    leader_client_cert_file = "{{ vault_tls_cert_file }}"
+    leader_client_key_file  = "{{ vault_tls_key_file }}"
+{% endif %}
+  }
+{% endfor %}
+
+{% if vault_raft_autopilot_enabled %}
+  autopilot {
+    cleanup_dead_servers      = true
+    last_contact_threshold    = "200ms"
+    dead_server_last_contact_threshold = "24h"
+    max_trailing_logs         = 250
+    min_quorum               = 3
+    server_stabilization_time = "10s"
+  }
+{% endif %}
+}
+
+listener "tcp" {
+  address         = "{{ vault_listen_address }}:{{ vault_api_port }}"
+  cluster_address = "{{ vault_listen_address }}:{{ vault_cluster_port }}"
+{% if vault_tls_enabled %}
+  tls_cert_file   = "{{ vault_tls_cert_file }}"
+  tls_key_file    = "{{ vault_tls_key_file }}"
+{% else %}
+  tls_disable     = true
+{% endif %}
+}
+
+{% if vault_telemetry_enabled %}
+telemetry {
+  prometheus_retention_time = "{{ vault_telemetry_prometheus_retention_time }}"
+  disable_hostname          = false
+}
+{% endif %}

@@ -1,0 +1,38 @@
+---
+vault_version: "1.17.0"
+vault_user: vault
+vault_group: vault
+
+# Directories
+vault_bin_dir: /usr/local/bin
+vault_config_dir: /etc/vault.d
+vault_data_dir: /opt/vault/data
+vault_log_dir: /var/log/vault
+vault_tls_dir: /opt/vault/tls
+
+# Network
+vault_api_port: 8200
+vault_cluster_port: 8201
+vault_listen_address: "0.0.0.0"
+vault_api_addr: "http://{{ ansible_default_ipv4.address }}:{{ vault_api_port }}"
+
+# Storage (file — for single node)
+vault_storage_backend: file  # file | raft
+
+# TLS (отключить в dev/test, включить в prod)
+vault_tls_enabled: false
+vault_tls_cert_file: "{{ vault_tls_dir }}/vault.crt"
+vault_tls_key_file: "{{ vault_tls_dir }}/vault.key"
+
+# UI
+vault_ui_enabled: true
+
+# Log level
+vault_log_level: info
+
+# Telemetry (Prometheus)
+vault_telemetry_enabled: true
+vault_telemetry_prometheus_retention_time: "30s"
+
+# Disable mlock (нужно для non-root, требует IPC_LOCK capability)
+vault_disable_mlock: false

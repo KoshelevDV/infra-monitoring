@@ -1,0 +1,111 @@
+---
+- name: Create vault group
+  ansible.builtin.group:
+    name: "{{ vault_group }}"
+    system: true
+
+- name: Create vault user
+  ansible.builtin.user:
+    name: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+
+- name: Create vault directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0750"
+  loop:
+    - "{{ vault_config_dir }}"
+    - "{{ vault_data_dir }}"
+    - "{{ vault_log_dir }}"
+    - "{{ vault_tls_dir }}"
+
+- name: Check installed vault version
+  ansible.builtin.command: "{{ vault_bin_dir }}/vault version"
+  register: vault_installed_version
+  changed_when: false
+  failed_when: false
+
+- name: Download vault binary
+  ansible.builtin.get_url:
+    url: "https://releases.hashicorp.com/vault/{{ vault_version }}/vault_{{ vault_version }}_linux_amd64.zip"
+    dest: "/tmp/vault_{{ vault_version }}_linux_amd64.zip"
+    mode: "0644"
+  when: >
+    vault_installed_version.rc != 0 or
+    vault_version not in vault_installed_version.stdout
+
+- name: Unzip vault binary
+  ansible.builtin.unarchive:
+    src: "/tmp/vault_{{ vault_version }}_linux_amd64.zip"
+    dest: "{{ vault_bin_dir }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart vault
+  when: >
+    vault_installed_version.rc != 0 or
+    vault_version not in vault_installed_version.stdout
+
+- name: Set IPC_LOCK capability on vault binary
+  community.general.capabilities:
+    path: "{{ vault_bin_dir }}/vault"
+    capability: cap_ipc_lock+ep
+    state: present
+  when: not vault_disable_mlock
+
+- name: Deploy vault configuration
+  ansible.builtin.template:
+    src: vault.hcl.j2
+    dest: "{{ vault_config_dir }}/vault.hcl"
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0640"
+  notify: Restart vault
+
+- name: Deploy vault systemd service
+  ansible.builtin.template:
+    src: vault.service.j2
+    dest: /etc/systemd/system/vault.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart vault
+
+- name: Enable and start vault
+  ansible.builtin.systemd:
+    name: vault
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Export VAULT_ADDR for all users
+  ansible.builtin.copy:
+    dest: /etc/profile.d/vault.sh
+    content: |
+      export VAULT_ADDR="{{ vault_api_addr }}"
+      {% if vault_tls_enabled %}
+      export VAULT_CACERT="{{ vault_tls_dir }}/ca.crt"
+      {% else %}
+      export VAULT_SKIP_VERIFY=true
+      {% endif %}
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Allow vault API port in UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ vault_api_port }}"
+    proto: tcp
+    comment: "HashiCorp Vault API"
+  when: ansible_facts.services['ufw.service'] is defined
+  ignore_errors: true

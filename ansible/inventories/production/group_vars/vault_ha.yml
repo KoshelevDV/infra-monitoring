@@ -1,0 +1,16 @@
+---
+# group_vars для HA Vault кластера (Raft, 3 ноды)
+# Задать реальные IP нод в hosts.yml
+
+vault_version: "1.17.0"
+vault_tls_enabled: false  # включить в продакшене!
+vault_ui_enabled: true
+vault_log_level: info
+vault_disable_mlock: false
+vault_telemetry_enabled: true
+
+# Peers для Raft retry_join — добавить IP всех нод кластера
+vault_raft_peers:
+  - leader_api_addr: "http://10.0.0.1:8200"
+  - leader_api_addr: "http://10.0.0.2:8200"
+  - leader_api_addr: "http://10.0.0.3:8200"

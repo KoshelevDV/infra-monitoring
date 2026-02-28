@@ -1,0 +1,25 @@
+ui = {{ vault_ui_enabled | lower }}
+log_level = "{{ vault_log_level }}"
+disable_mlock = {{ vault_disable_mlock | lower }}
+api_addr = "{{ vault_api_addr }}"
+
+storage "file" {
+  path = "{{ vault_data_dir }}"
+}
+
+listener "tcp" {
+  address       = "{{ vault_listen_address }}:{{ vault_api_port }}"
+{% if vault_tls_enabled %}
+  tls_cert_file = "{{ vault_tls_cert_file }}"
+  tls_key_file  = "{{ vault_tls_key_file }}"
+{% else %}
+  tls_disable   = true
+{% endif %}
+}
+
+{% if vault_telemetry_enabled %}
+telemetry {
+  prometheus_retention_time = "{{ vault_telemetry_prometheus_retention_time }}"
+  disable_hostname          = false
+}
+{% endif %}

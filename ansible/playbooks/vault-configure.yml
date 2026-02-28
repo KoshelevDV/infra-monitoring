@@ -1,0 +1,48 @@
+---
+# Конфигурация Vault: политики, auth methods, secret engines, пользователи
+# Использование:
+#   ansible-playbook playbooks/vault-configure.yml -i inventories/production/hosts.yml \
+#     -l vault_single \
+#     --extra-vars "vault_root_token=s.XXXXXXXXXXXX"
+#
+# Или (безопаснее) через ansible-vault:
+#   ansible-playbook playbooks/vault-configure.yml -i inventories/production/hosts.yml \
+#     -l vault_single \
+#     --ask-vault-pass
+#
+# Запускать только на одной активной ноде (leader для HA)
+
+- name: Configure Vault (policies, auth, engines)
+  hosts: vault_single:vault_ha[0]
+  become: false
+  gather_facts: false
+
+  vars:
+    # Пример базовой конфигурации — переопределяй в group_vars или extra-vars
+    vault_kv_engines:
+      - path: secret
+        version: 2
+        description: "Main KV v2 secrets store"
+
+    vault_policies:
+      - name: admin
+        rules: |
+          path "*" {
+            capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+          }
+
+      - name: read-only
+        rules: |
+          path "secret/data/*" {
+            capabilities = ["read", "list"]
+          }
+
+    vault_auth_userpass_enabled: true
+    vault_userpass_users:
+      - username: admin
+        password: "{{ vault_admin_password | default('ChangeMe123!') }}"
+        policies:
+          - admin
+
+  roles:
+    - role: vault_configure

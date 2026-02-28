@@ -1,0 +1,15 @@
+---
+# Развернуть HashiCorp Vault (single node, file storage)
+# Использование:
+#   ansible-playbook playbooks/vault-single.yml -i inventories/production/hosts.yml \
+#     -l vault_single
+#
+# После деплоя — запустить vault-init.yml для инициализации и unseal
+
+- name: Deploy HashiCorp Vault (single node)
+  hosts: vault_single
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: vault

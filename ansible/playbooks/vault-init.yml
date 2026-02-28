@@ -1,0 +1,24 @@
+---
+# Инициализация и unseal HashiCorp Vault
+# Использование:
+#   # Single node:
+#   ansible-playbook playbooks/vault-init.yml -i inventories/production/hosts.yml \
+#     -l vault_single
+#
+#   # HA — только первая нода (инициализация), затем остальные (только unseal):
+#   ansible-playbook playbooks/vault-init.yml -i inventories/production/hosts.yml \
+#     -l vault_ha[0]                          # init первой ноды
+#   ansible-playbook playbooks/vault-init.yml -i inventories/production/hosts.yml \
+#     -l vault_ha                             # unseal всех нод
+#
+# Unseal-ключи сохраняются в ./vault-keys/<hostname>-vault-keys.json на control node.
+# ДЕРЖИ В СЕКРЕТЕ. Добавь в .gitignore!
+
+- name: Initialize and unseal Vault
+  hosts: vault_single:vault_ha
+  become: false
+  gather_facts: false
+  serial: 1  # по одной ноде — важно для HA
+
+  roles:
+    - role: vault_unseal

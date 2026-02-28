@@ -1,0 +1,40 @@
+---
+# Наследует всё от vault-роли, переопределяет storage на Raft
+vault_version: "1.17.0"
+vault_user: vault
+vault_group: vault
+
+vault_bin_dir: /usr/local/bin
+vault_config_dir: /etc/vault.d
+vault_data_dir: /opt/vault/data
+vault_log_dir: /var/log/vault
+vault_tls_dir: /opt/vault/tls
+
+vault_api_port: 8200
+vault_cluster_port: 8201
+vault_listen_address: "0.0.0.0"
+
+# Для HA vault_api_addr должен быть схемой://IP:port текущего узла
+vault_api_addr: "http://{{ ansible_default_ipv4.address }}:{{ vault_api_port }}"
+vault_cluster_addr: "http://{{ ansible_default_ipv4.address }}:{{ vault_cluster_port }}"
+
+vault_tls_enabled: false
+vault_tls_cert_file: "{{ vault_tls_dir }}/vault.crt"
+vault_tls_key_file: "{{ vault_tls_dir }}/vault.key"
+
+vault_ui_enabled: true
+vault_log_level: info
+vault_telemetry_enabled: true
+vault_telemetry_prometheus_retention_time: "30s"
+vault_disable_mlock: false
+
+# Raft peer list — задаётся через inventory или group_vars
+# Пример:
+# vault_raft_peers:
+#   - { address: "10.0.0.1:8201", leader_api_addr: "http://10.0.0.1:8200" }
+#   - { address: "10.0.0.2:8201", leader_api_addr: "http://10.0.0.2:8200" }
+#   - { address: "10.0.0.3:8201", leader_api_addr: "http://10.0.0.3:8200" }
+vault_raft_peers: []
+
+# Autopilot (Raft)
+vault_raft_autopilot_enabled: true

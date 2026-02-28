@@ -1,0 +1,20 @@
+---
+vault_api_addr: "http://127.0.0.1:8200"
+vault_tls_enabled: false
+vault_tls_ca_cert: ""
+
+# vault operator init params
+vault_init_key_shares: 5
+vault_init_key_threshold: 3
+
+# Куда сохранять unseal keys и root token (на Ansible-control node)
+vault_keys_output_dir: "{{ playbook_dir }}/vault-keys"
+vault_keys_file: "{{ vault_keys_output_dir }}/{{ inventory_hostname }}-vault-keys.json"
+
+# Unseal: подать ключи вручную (vault_unseal_keys) или читать из файла (vault_read_keys_from_file)
+# Если vault_read_keys_from_file=true — читать vault_keys_file, иначе использовать vault_unseal_keys
+vault_read_keys_from_file: true
+vault_unseal_keys: []  # список ключей (если не читаем из файла)
+
+# Количество ключей для unseal (должно быть >= key_threshold)
+vault_unseal_key_count: 3
