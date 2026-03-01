@@ -1,0 +1,9 @@
+# Managed by Ansible — do not edit manually
+[sshd]
+enabled  = true
+port     = {{ fail2ban_ssh_port }}
+backend  = systemd
+maxretry = {{ fail2ban_maxretry }}
+findtime = {{ fail2ban_findtime }}
+bantime  = {{ fail2ban_bantime }}
+ignoreip = {{ fail2ban_ignoreip }}{% if fail2ban_whitelist_ips %} {{ fail2ban_whitelist_ips | join(' ') }}{% endif %}

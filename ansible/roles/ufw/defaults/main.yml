@@ -1,0 +1,18 @@
+---
+# SSH port — should match ssh_hardening role
+ufw_ssh_port: "{{ ssh_port | default(22) }}"
+
+# Trusted IP(s) with full unrestricted access (e.g. your management host)
+# Set to empty list to skip
+ufw_trusted_ips: []
+# ufw_trusted_ips:
+#   - 188.235.162.120
+
+# Additional UFW rules (beyond SSH and trusted IPs)
+# Format: { port, proto, from, comment }
+ufw_extra_rules: []
+# ufw_extra_rules:
+#   - { port: 80, proto: tcp, from: any, comment: "HTTP" }
+#   - { port: 443, proto: tcp, from: any, comment: "HTTPS" }
+
+ufw_logging: "on"

@@ -1,0 +1,23 @@
+---
+- name: Pull Uptime Kuma image
+  community.docker.docker_image:
+    name: "{{ uptime_kuma_image }}"
+    source: pull
+
+- name: Run Uptime Kuma container
+  community.docker.docker_container:
+    name: "{{ uptime_kuma_container_name }}"
+    image: "{{ uptime_kuma_image }}"
+    state: started
+    restart_policy: "{{ uptime_kuma_restart_policy }}"
+    ports:
+      - "{{ uptime_kuma_port }}:3001"
+    volumes:
+      - "{{ uptime_kuma_volume }}:/app/data"
+
+- name: Wait for Uptime Kuma to be ready
+  ansible.builtin.wait_for:
+    port: "{{ uptime_kuma_port }}"
+    host: localhost
+    delay: 3
+    timeout: 30

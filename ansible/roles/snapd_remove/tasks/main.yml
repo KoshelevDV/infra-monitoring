@@ -1,0 +1,42 @@
+---
+- name: Check if snapd is installed
+  ansible.builtin.command: dpkg-query -W snapd
+  register: snapd_check
+  changed_when: false
+  failed_when: false
+
+- name: Stop and disable snapd units
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop:
+    - snapd.service
+    - snapd.socket
+    - snapd.seeded.service
+  when: snapd_check.rc == 0
+  failed_when: false
+
+- name: Purge snapd package
+  ansible.builtin.apt:
+    name: snapd
+    state: absent
+    purge: true
+    autoremove: true
+  when: snapd_check.rc == 0
+
+- name: Remove snapd directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ snapd_remove_dirs }}"
+
+- name: Remove user snap directory
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/snap"
+    state: absent
+
+- name: Hold snapd to prevent reinstallation
+  ansible.builtin.dpkg_selections:
+    name: snapd
+    selection: hold
