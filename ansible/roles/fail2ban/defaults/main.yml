@@ -1,0 +1,11 @@
+---
+fail2ban_ssh_port: "{{ ssh_port | default(22) }}"
+fail2ban_maxretry: 4
+fail2ban_findtime: 300
+fail2ban_bantime: 3600
+# IPs that are never banned (space-separated)
+fail2ban_ignoreip: "127.0.0.1/8 ::1"
+# Additional IPs to whitelist (list, merged with ignoreip)
+fail2ban_whitelist_ips: []
+# fail2ban_whitelist_ips:
+#   - 188.235.162.120

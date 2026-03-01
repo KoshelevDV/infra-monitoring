@@ -1,0 +1,6 @@
+---
+snapd_remove_dirs:
+  - /snap
+  - /var/snap
+  - /var/lib/snapd
+  - /var/cache/snapd

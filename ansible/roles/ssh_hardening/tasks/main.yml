@@ -1,0 +1,51 @@
+---
+- name: Detect systemd socket activation for SSH (Ubuntu 24.04+)
+  ansible.builtin.stat:
+    path: /lib/systemd/system/ssh.socket
+  register: ssh_socket_file
+
+- name: Create systemd socket override directory (Ubuntu 24.04+)
+  ansible.builtin.file:
+    path: /etc/systemd/system/ssh.socket.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: ssh_socket_file.stat.exists
+
+- name: Deploy systemd socket override (Ubuntu 24.04+)
+  ansible.builtin.template:
+    src: ssh-socket-override.conf.j2
+    dest: /etc/systemd/system/ssh.socket.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: ssh_socket_file.stat.exists
+  notify:
+    - Reload systemd
+    - Restart ssh socket
+
+- name: Deploy sshd hardening config
+  ansible.builtin.template:
+    src: 99-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/99-hardening.conf
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Reload ssh
+
+- name: Validate sshd config
+  ansible.builtin.command: sshd -t
+  changed_when: false
+
+- name: Flush handlers to apply SSH changes before continuing
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for SSH on new port
+  ansible.builtin.wait_for:
+    port: "{{ ssh_port }}"
+    host: "{{ ansible_host }}"
+    delay: 2
+    timeout: 30
+  delegate_to: localhost
+  become: false

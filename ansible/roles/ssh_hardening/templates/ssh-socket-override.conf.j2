@@ -1,0 +1,7 @@
+# Managed by Ansible — do not edit manually
+# Ubuntu 24.04+ uses systemd socket activation for SSH.
+# The Port directive in sshd_config is ignored; port is controlled here.
+[Socket]
+ListenStream=
+ListenStream=0.0.0.0:{{ ssh_port }}
+ListenStream=[::]:{{ ssh_port }}

@@ -240,3 +240,88 @@ keytool -genkey -keyalg RSA -alias kafka -keystore kafka.keystore.jks \
 # Подписать сертификат CA и импортировать
 # (полная инструкция: kafka.apache.org/documentation/#security_ssl)
 ```
+
+---
+
+## Server Hardening
+
+Роли для первичной настройки и хардинга VPS/серверов (Ubuntu 22.04+, Ubuntu 24.04).
+
+### Роли
+
+| Роль | Назначение |
+|------|-----------|
+| `snapd_remove` | Удаляет snapd, очищает директории, блокирует переустановку через `apt-mark hold` |
+| `ssh_hardening` | Кастомный порт SSH, key-only auth, запрет root; поддерживает systemd socket activation (Ubuntu 24.04+) |
+| `ufw` | Настройка UFW: default deny, SSH открыт всем, полный доступ для доверенных IP |
+| `fail2ban` | Защита SSH от брутфорса; backend=systemd для Ubuntu 24.04+; whitelist для доверенных IP |
+| `docker` | Установка Docker CE через официальный репозиторий, добавление пользователей в группу docker |
+| `uptime_kuma` | Деплой Uptime Kuma в Docker (named volume, unless-stopped) |
+
+### Быстрый старт — хардинг нового сервера
+
+```bash
+# 1. Добавить хост в inventories/production/hosts.yml → группа vps
+#    Указать ansible_port: 22 (дефолт) перед первым запуском
+
+# 2. Хардинг (snapd + SSH + UFW + fail2ban)
+ansible-playbook -i inventories/production playbooks/server-hardening.yml --limit vps-01
+
+# ВАЖНО: после этого SSH переезжает на порт 22022.
+# Обновить ansible_port: 22022 в hosts.yml для следующих запусков.
+
+# 3. Docker + Uptime Kuma
+ansible-playbook -i inventories/production playbooks/uptime-kuma.yml --limit vps-01
+
+# Dry run перед применением
+ansible-playbook -i inventories/production playbooks/server-hardening.yml --check --diff --limit vps-01
+```
+
+### Переменные ssh_hardening
+
+| Переменная | По умолчанию | Описание |
+|-----------|-------------|----------|
+| `ssh_port` | 22022 | SSH порт |
+| `ssh_permit_root_login` | no | Запрет root входа |
+| `ssh_password_authentication` | no | Только ключи |
+| `ssh_max_auth_tries` | 3 | Попыток на соединение |
+| `ssh_login_grace_time` | 30 | Секунд на аутентификацию |
+
+### Переменные ufw
+
+| Переменная | По умолчанию | Описание |
+|-----------|-------------|----------|
+| `ufw_ssh_port` | `{{ ssh_port \| default(22) }}` | SSH порт (берётся из ssh_hardening) |
+| `ufw_trusted_ips` | `[]` | Список IP с полным доступом |
+| `ufw_extra_rules` | `[]` | Дополнительные правила |
+
+### Переменные fail2ban
+
+| Переменная | По умолчанию | Описание |
+|-----------|-------------|----------|
+| `fail2ban_ssh_port` | `{{ ssh_port \| default(22) }}` | Порт SSH для jail |
+| `fail2ban_maxretry` | 4 | Попыток до бана |
+| `fail2ban_findtime` | 300 | Временное окно (сек) |
+| `fail2ban_bantime` | 3600 | Время бана (сек) |
+| `fail2ban_whitelist_ips` | `[]` | IP которые никогда не банятся |
+
+### ⚠️ Нюансы Ubuntu 24.04 — systemd socket activation
+
+В Ubuntu 24.04 SSH работает через `ssh.socket`. Директива `Port` в `sshd_config` **игнорируется** — порт контролирует сокет.
+
+Роль `ssh_hardening` автоматически определяет наличие `ssh.socket` и создаёт override:
+`/etc/systemd/system/ssh.socket.d/override.conf`
+
+Это прозрачно для Ubuntu 22.04 (где socket activation нет).
+
+### ⚠️ Порядок применения
+
+1. Перед первым запуском `server-hardening.yml` — убедиться что в inventory `ansible_port: 22`
+2. После прогона — обновить `ansible_port: 22022`
+3. Плейбук сам ждёт появления нового порта (`wait_for`) перед завершением
+
+### ⚠️ Docker и UFW
+
+Docker напрямую манипулирует iptables и обходит UFW.  
+Опубликованные порты контейнеров (`-p host:container`) доступны снаружи даже если UFW их блокирует.  
+Для изоляции биндить контейнер на localhost: `ports: ["127.0.0.1:3001:3001"]`

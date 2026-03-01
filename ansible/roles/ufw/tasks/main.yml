@@ -1,0 +1,45 @@
+---
+- name: Install ufw
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+    update_cache: true
+
+- name: Set UFW default policies
+  community.general.ufw:
+    direction: "{{ item.direction }}"
+    policy: "{{ item.policy }}"
+  loop:
+    - { direction: incoming, policy: deny }
+    - { direction: outgoing, policy: allow }
+
+- name: Allow SSH on custom port (open to all, fail2ban protects it)
+  community.general.ufw:
+    rule: allow
+    port: "{{ ufw_ssh_port | string }}"
+    proto: tcp
+    comment: "SSH port {{ ufw_ssh_port }}"
+
+- name: Allow full access from trusted IPs
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item }}"
+    comment: "trusted IP full access"
+  loop: "{{ ufw_trusted_ips }}"
+
+- name: Apply extra UFW rules
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port | string }}"
+    proto: "{{ item.proto | default('tcp') }}"
+    from_ip: "{{ item.from | default('any') }}"
+    comment: "{{ item.comment | default('') }}"
+  loop: "{{ ufw_extra_rules }}"
+
+- name: Set UFW logging
+  community.general.ufw:
+    logging: "{{ ufw_logging }}"
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
