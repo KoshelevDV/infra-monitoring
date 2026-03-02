@@ -1,6 +1,6 @@
 ---
 # Server hardening playbook
-# Runs: snapd removal, SSH hardening, UFW, fail2ban
+# Runs: snapd removal, SSH hardening (modern crypto, DH cleanup), UFW, fail2ban, unattended-upgrades
 #
 # Usage:
 #   ansible-playbook -i inventories/production playbooks/server-hardening.yml
@@ -24,3 +24,4 @@
     - role: ssh_hardening
     - role: ufw
     - role: fail2ban
+    - role: unattended_upgrades
