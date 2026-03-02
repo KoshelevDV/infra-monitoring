@@ -1,0 +1,20 @@
+---
+# Автоматически применять только security-патчи
+uu_origins_pattern:
+  - "origin=Debian,codename=${distro_codename},label=Debian-Security"
+  - "origin=Ubuntu,codename=${distro_codename},label=Ubuntu"
+  - "origin=Ubuntu,codename=${distro_codename}-security,label=Ubuntu"
+
+# Перезагружать если нужно (ядро, libc)
+uu_automatic_reboot: false
+uu_automatic_reboot_time: "03:00"
+
+# Удалять неиспользуемые зависимости после обновления
+uu_remove_unused_dependencies: true
+
+# Email для уведомлений (пусто — не отправлять)
+uu_mail_to: ""
+
+# Интервал проверки обновлений (в днях)
+uu_update_package_lists: 1
+uu_unattended_upgrade: 1
