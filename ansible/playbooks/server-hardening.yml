@@ -1,26 +1,25 @@
 ---
 # Server hardening playbook
-# Runs: snapd removal, SSH hardening, UFW, fail2ban
+# Applies: snapd removal, SSH hardening, UFW, fail2ban, unattended-upgrades
+#
+# All parameters are in group_vars/<group>.yml — do NOT set vars here.
+# VPS-specific overrides: inventories/production/group_vars/vps.yml
 #
 # Usage:
 #   ansible-playbook -i inventories/production playbooks/server-hardening.yml
-#   ansible-playbook -i inventories/production playbooks/server-hardening.yml --limit vps
+#   ansible-playbook -i inventories/production playbooks/server-hardening.yml --limit vps-01
 #   ansible-playbook -i inventories/production playbooks/server-hardening.yml --check --diff
 #
-# WARNING: Changes SSH port. After first run, update ansible_port in inventory.
+# WARNING: This playbook changes the SSH port. After the first run,
+#          ansible_port in inventory should already reflect the new port.
 
 - name: Server hardening
-  hosts: all
+  hosts: vps
   become: true
-  vars:
-    ssh_port: 22022
-    ufw_trusted_ips:
-      - 188.235.162.120
-    fail2ban_whitelist_ips:
-      - 188.235.162.120
 
   roles:
     - role: snapd_remove
     - role: ssh_hardening
     - role: ufw
     - role: fail2ban
+    - role: unattended_upgrades

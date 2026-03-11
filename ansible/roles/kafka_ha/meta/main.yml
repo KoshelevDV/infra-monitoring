@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  role_name: kafka_ha
+  min_ansible_version: "2.9"
+
+dependencies: []

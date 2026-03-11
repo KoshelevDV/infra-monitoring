@@ -1,16 +1,14 @@
 ---
 # Deploy Docker + Uptime Kuma
+# Parameters: group_vars/vps.yml (or target group)
 #
 # Usage:
 #   ansible-playbook -i inventories/production playbooks/uptime-kuma.yml
-#   ansible-playbook -i inventories/production playbooks/uptime-kuma.yml --limit vps
+#   ansible-playbook -i inventories/production playbooks/uptime-kuma.yml --limit vps-01
 
 - name: Deploy Uptime Kuma
-  hosts: all
+  hosts: vps
   become: true
-  vars:
-    docker_users:
-      - "{{ ansible_user }}"
 
   roles:
     - role: docker

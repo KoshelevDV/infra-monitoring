@@ -1,0 +1,7 @@
+---
+galaxy_info:
+  role_name: snapd_remove
+  description: Remove snapd and prevent re-installation
+  min_ansible_version: "2.9"
+
+dependencies: []

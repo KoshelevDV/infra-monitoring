@@ -1,0 +1,7 @@
+---
+galaxy_info:
+  role_name: ssh_hardening
+  description: Harden SSH daemon configuration (port, crypto, auth policies)
+  min_ansible_version: "2.9"
+
+dependencies: []
