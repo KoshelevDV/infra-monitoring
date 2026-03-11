@@ -1,0 +1,38 @@
+vault_address      = "https://vault.internal:8200"
+vault_token        = "hvs.XXXXXXXX" # root token для первоначальной настройки
+vault_ca_cert_file = "/etc/ssl/vault/ca.crt"
+
+policies = [
+  {
+    name = "admin"
+    rules = [
+      { path = "secret/*",   capabilities = ["create", "read", "update", "delete", "list"] },
+      { path = "sys/health", capabilities = ["read"] }
+    ]
+  },
+  {
+    name = "readonly"
+    rules = [
+      { path = "secret/data/*", capabilities = ["read", "list"] }
+    ]
+  }
+]
+
+kv_engines = [
+  { path = "secret", description = "Main KV store",        max_versions = 10 },
+  { path = "infra",  description = "Infrastructure secrets", max_versions = 5 }
+]
+
+approle_roles = [
+  {
+    role_name      = "gitlab-reviewer"
+    token_policies = ["readonly"]
+    token_ttl      = 3600
+    token_max_ttl  = 86400
+    secret_id_ttl  = 86400
+  }
+]
+
+userpass_users = [
+  { username = "admin", password = "CHANGE_ME", policies = ["admin"] }
+]
