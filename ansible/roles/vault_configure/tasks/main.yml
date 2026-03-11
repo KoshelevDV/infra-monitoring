@@ -1,5 +1,6 @@
 ---
 - name: Set vault headers
+  no_log: true
   ansible.builtin.set_fact:
     vault_headers:
       X-Vault-Token: "{{ vault_root_token }}"
@@ -7,6 +8,7 @@
 # ── KV Secret Engines ──────────────────────────────────────────────────────────
 
 - name: Enable KV secret engines
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/sys/mounts/{{ item.path }}"
     method: POST
@@ -24,6 +26,7 @@
 # ── Policies ──────────────────────────────────────────────────────────────────
 
 - name: Create vault policies
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/sys/policies/acl/{{ item.name }}"
     method: POST
@@ -38,6 +41,7 @@
 # ── Kubernetes Auth ───────────────────────────────────────────────────────────
 
 - name: Enable Kubernetes auth method
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/sys/auth/kubernetes"
     method: POST
@@ -50,6 +54,7 @@
   when: vault_auth_kubernetes_enabled
 
 - name: Configure Kubernetes auth method
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/auth/kubernetes/config"
     method: POST
@@ -64,6 +69,7 @@
   when: vault_auth_kubernetes_enabled
 
 - name: Create Kubernetes auth roles
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/auth/kubernetes/role/{{ item.name }}"
     method: POST
@@ -82,6 +88,7 @@
 # ── AppRole Auth ──────────────────────────────────────────────────────────────
 
 - name: Enable AppRole auth method
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/sys/auth/approle"
     method: POST
@@ -94,6 +101,7 @@
   when: vault_auth_approle_enabled
 
 - name: Create AppRoles
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/auth/approle/role/{{ item.name }}"
     method: POST
@@ -111,6 +119,7 @@
   when: vault_auth_approle_enabled
 
 - name: Fetch AppRole role-ids
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/auth/approle/role/{{ item.name }}/role-id"
     method: GET
@@ -129,6 +138,7 @@
 # ── JWT Auth ──────────────────────────────────────────────────────────────────
 
 - name: Enable JWT auth method
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/sys/auth/jwt"
     method: POST
@@ -141,6 +151,7 @@
   when: vault_auth_jwt_enabled
 
 - name: Configure JWT auth method
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/auth/jwt/config"
     method: POST
@@ -154,6 +165,7 @@
   when: vault_auth_jwt_enabled and vault_auth_jwt_oidc_discovery_url != ""
 
 - name: Create JWT roles
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/auth/jwt/role/{{ item.name }}"
     method: POST
@@ -168,6 +180,7 @@
 # ── Userpass Auth ─────────────────────────────────────────────────────────────
 
 - name: Enable userpass auth method
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/sys/auth/userpass"
     method: POST
@@ -197,6 +210,7 @@
 # ── Database Secret Engine ────────────────────────────────────────────────────
 
 - name: Enable database secret engine
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/sys/mounts/database"
     method: POST
@@ -252,6 +266,7 @@
 # ── PKI Secret Engine ─────────────────────────────────────────────────────────
 
 - name: Enable PKI secret engine
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/sys/mounts/{{ vault_pki_mount }}"
     method: POST
@@ -266,6 +281,7 @@
   when: vault_pki_enabled
 
 - name: Generate PKI root certificate
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/{{ vault_pki_mount }}/root/generate/internal"
     method: POST
@@ -280,6 +296,7 @@
   when: vault_pki_enabled
 
 - name: Create PKI roles
+  no_log: true
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/{{ vault_pki_mount }}/roles/{{ item.name }}"
     method: POST

@@ -8,7 +8,7 @@ Wants=network-online.target
 User={{ postgres_exporter_user }}
 Group={{ postgres_exporter_user }}
 Type=simple
-Environment="DATA_SOURCE_NAME={{ postgres_exporter_dsn }}"
+EnvironmentFile=/etc/prometheus-exporters/postgres-exporter/.env
 ExecStart={{ exporter_bin_dir }}/postgres_exporter \
     --web.listen-address={{ exporter_listen_address }}:{{ postgres_exporter_port }} \
 {% if postgres_exporter_custom_queries %}
