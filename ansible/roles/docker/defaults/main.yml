@@ -13,3 +13,13 @@ docker_packages:
 
 # Apt keyring path
 docker_apt_keyring: /etc/apt/keyrings/docker.asc
+
+# Daemon configuration written to /etc/docker/daemon.json
+# Set to empty dict {} to skip daemon.json management
+docker_daemon_options: {}
+# docker_daemon_options:
+#   log-driver: "json-file"
+#   log-opts:
+#     max-size: "100m"
+#     max-file: "3"
+#   storage-driver: "overlay2"

@@ -10,6 +10,13 @@ PermitEmptyPasswords no
 HostbasedAuthentication no
 IgnoreRhosts yes
 
+# Access control
+UseDNS {{ ssh_use_dns }}
+Banner {{ ssh_banner }}
+{% if ssh_allowed_users | length > 0 %}
+AllowUsers {{ ssh_allowed_users | join(' ') }}
+{% endif %}
+
 # Forwarding — disabled
 X11Forwarding {{ ssh_x11_forwarding }}
 AllowAgentForwarding {{ ssh_allow_agent_forwarding }}

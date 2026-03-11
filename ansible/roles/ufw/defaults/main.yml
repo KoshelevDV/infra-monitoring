@@ -16,3 +16,4 @@ ufw_extra_rules: []
 #   - { port: 443, proto: tcp, from: any, comment: "HTTPS" }
 
 ufw_logging: "on"
+ufw_default_forward_policy: "deny"
