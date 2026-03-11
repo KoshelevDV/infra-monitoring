@@ -1,0 +1,108 @@
+---
+# 1. Create TLS directory
+- name: Create TLS directory
+  ansible.builtin.file:
+    path: "{{ tls_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# 2. Generate CA private key
+- name: Generate CA private key
+  community.crypto.openssl_privatekey:
+    path: "{{ tls_dir }}/ca.key"
+    size: "{{ tls_key_size }}"
+    mode: "0600"
+    owner: root
+    group: root
+
+# 3. Generate CA CSR
+- name: Generate CA certificate signing request
+  community.crypto.openssl_csr:
+    path: "{{ tls_dir }}/ca.csr"
+    privatekey_path: "{{ tls_dir }}/ca.key"
+    common_name: "{{ tls_ca_common_name }}"
+    use_common_name_for_san: false
+    basic_constraints:
+      - "CA:TRUE"
+    basic_constraints_critical: true
+    key_usage:
+      - keyCertSign
+      - cRLSign
+    key_usage_critical: true
+    owner: root
+    group: root
+    mode: "0644"
+
+# 4. Self-sign CA certificate
+- name: Generate self-signed CA certificate
+  community.crypto.x509_certificate:
+    path: "{{ tls_dir }}/ca.crt"
+    csr_path: "{{ tls_dir }}/ca.csr"
+    privatekey_path: "{{ tls_dir }}/ca.key"
+    provider: selfsigned
+    selfsigned_not_after: "+{{ tls_valid_days }}d"
+    selfsigned_not_before: "-1d"
+    owner: root
+    group: root
+    mode: "0644"
+
+# 5. Generate server private key
+- name: Generate server private key
+  community.crypto.openssl_privatekey:
+    path: "{{ tls_dir }}/server.key"
+    size: "{{ tls_key_size }}"
+    mode: "0640"
+    owner: root
+    group: "{{ tls_group }}"
+
+# 6. Generate server CSR with SAN
+- name: Generate server certificate signing request with SAN
+  community.crypto.openssl_csr:
+    path: "{{ tls_dir }}/server.csr"
+    privatekey_path: "{{ tls_dir }}/server.key"
+    common_name: "{{ tls_cert_common_name }}"
+    subject_alt_name: "{{ _san_list }}"
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    _san_ips: >-
+      {{
+        (tls_cert_san_ips + [ansible_default_ipv4.address | default('')])
+        | select('ne', '')
+        | unique
+        | map('regex_replace', '^(.+)$', 'IP:\1')
+        | list
+      }}
+    _san_dns: >-
+      {{
+        (tls_cert_san_dns + [inventory_hostname])
+        | unique
+        | map('regex_replace', '^(.+)$', 'DNS:\1')
+        | list
+      }}
+    _san_list: "{{ _san_ips + _san_dns }}"
+
+# 7. Sign server certificate with CA
+- name: Sign server certificate with CA
+  community.crypto.x509_certificate:
+    path: "{{ tls_dir }}/server.crt"
+    csr_path: "{{ tls_dir }}/server.csr"
+    ownca_path: "{{ tls_dir }}/ca.crt"
+    ownca_privatekey_path: "{{ tls_dir }}/ca.key"
+    provider: ownca
+    ownca_not_after: "+{{ tls_cert_valid_days }}d"
+    ownca_not_before: "-1d"
+    owner: root
+    group: root
+    mode: "0644"
+
+# 8. Set correct owner on server key
+- name: Set owner on server private key
+  ansible.builtin.file:
+    path: "{{ tls_dir }}/server.key"
+    owner: "{{ tls_owner }}"
+    group: "{{ tls_group }}"
+    mode: "0640"

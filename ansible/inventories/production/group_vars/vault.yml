@@ -1,0 +1,7 @@
+---
+# group_vars для single-node Vault
+
+# TLS settings (managed by system_tls role)
+vault_tls_enabled: true
+vault_tls_cert_file: /etc/ssl/vault/server.crt
+vault_tls_key_file: /etc/ssl/vault/server.key

@@ -1,5 +1,7 @@
 ---
 galaxy_info:
+  author: infra-team
+  license: MIT
   role_name: ufw
   description: Configure UFW firewall
   min_ansible_version: "2.9"

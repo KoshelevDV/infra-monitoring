@@ -5,6 +5,7 @@
       VAULT_ADDR: "{{ vault_api_addr }}"
       VAULT_SKIP_VERIFY: "{{ 'true' if not vault_tls_enabled else 'false' }}"
 
+# Wait for Vault to be reachable (handles slow startup)
 - name: Wait for vault to be reachable
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/sys/health"
@@ -16,12 +17,51 @@
   delay: 5
   until: vault_health.status in [200, 429, 472, 473, 501, 503]
 
+# Store health status code for decision-making (matches vip-repo pattern)
+- name: Set vault status code fact
+  ansible.builtin.set_fact:
+    vault_status_code: "{{ vault_health.status | string }}"
+
+- name: Show current vault status
+  ansible.builtin.debug:
+    msg: "Vault status code: {{ vault_status_code }} on {{ inventory_hostname }}"
+
+# Early exit: vault is already initialized and unsealed (status 200)
+- name: Skip host — vault already initialized and unsealed
+  ansible.builtin.meta: end_host
+  when: vault_status_code == "200"
+
+# Auto-Unseal path: vault initialized but auto-unsealing (transit/cloud KMS)
+- name: Wait for vault to auto-unseal (Auto-Unseal mode)
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/health"
+    method: GET
+    status_code: [200]
+    validate_certs: "{{ vault_tls_enabled }}"
+  register: vault_auto_unseal_status
+  retries: 20
+  delay: 5
+  until: vault_auto_unseal_status.status == 200
+  when: vault_auto_unseal_enabled | bool and vault_status_code != "501"
+
+- name: Skip host — vault auto-unsealed successfully
+  ansible.builtin.meta: end_host
+  when: vault_auto_unseal_enabled | bool and vault_status_code != "501"
+
+# --- Initialization block (status 501 = not initialized) ---
 - name: Check vault init status
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/sys/init"
     method: GET
     validate_certs: "{{ vault_tls_enabled }}"
   register: vault_init_status
+
+- name: Check if vault keys file already exists on control node
+  ansible.builtin.stat:
+    path: "{{ vault_keys_file }}"
+  register: vault_keys_file_stat
+  delegate_to: localhost
+  when: not vault_init_status.json.initialized
 
 - name: Create output directory for vault keys (control node)
   ansible.builtin.file:
@@ -32,7 +72,57 @@
   run_once: true
   when: not vault_init_status.json.initialized
 
-- name: Initialize vault
+# Initialize vault with Auto-Unseal (recovery keys instead of unseal keys)
+- name: Initialize vault with Auto-Unseal (Transit / Cloud KMS)
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/init"
+    method: POST
+    body_format: json
+    body:
+      recovery_shares: "{{ vault_init_key_shares }}"
+      recovery_threshold: "{{ vault_init_key_threshold }}"
+    validate_certs: "{{ vault_tls_enabled }}"
+  register: vault_init_auto_result
+  when:
+    - not vault_init_status.json.initialized
+    - vault_auto_unseal_enabled | bool
+    - not (vault_keys_file_stat.stat.exists | default(false))
+
+- name: Save vault recovery keys (Auto-Unseal) — skip if already saved
+  ansible.builtin.copy:
+    content: "{{ vault_init_auto_result.json | to_nice_json }}"
+    dest: "{{ vault_keys_file }}"
+    mode: "0600"
+  delegate_to: localhost
+  when:
+    - not vault_init_status.json.initialized
+    - vault_auto_unseal_enabled | bool
+    - not (vault_keys_file_stat.stat.exists | default(false))
+  no_log: true
+
+# Wait for auto-unseal to complete after initialization
+- name: Wait for vault to auto-unseal after init
+  ansible.builtin.uri:
+    url: "{{ vault_api_addr }}/v1/sys/health"
+    method: GET
+    status_code: [200]
+    validate_certs: "{{ vault_tls_enabled }}"
+  register: vault_post_init_auto_status
+  retries: 20
+  delay: 5
+  until: vault_post_init_auto_status.status == 200
+  when:
+    - not vault_init_status.json.initialized
+    - vault_auto_unseal_enabled | bool
+
+- name: End host after successful Auto-Unseal init
+  ansible.builtin.meta: end_host
+  when:
+    - not vault_init_status.json.initialized
+    - vault_auto_unseal_enabled | bool
+
+# Initialize vault with manual unseal keys (standard mode)
+- name: Initialize vault (manual unseal mode)
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/sys/init"
     method: POST
@@ -42,28 +132,43 @@
       secret_threshold: "{{ vault_init_key_threshold }}"
     validate_certs: "{{ vault_tls_enabled }}"
   register: vault_init_result
-  when: not vault_init_status.json.initialized
+  when:
+    - not vault_init_status.json.initialized
+    - not (vault_auto_unseal_enabled | bool)
+    - not (vault_keys_file_stat.stat.exists | default(false))
 
+# Only save keys if file doesn't already exist (idempotent re-runs)
 - name: Save vault keys to control node (SENSITIVE — chmod 600!)
   ansible.builtin.copy:
     content: "{{ vault_init_result.json | to_nice_json }}"
     dest: "{{ vault_keys_file }}"
     mode: "0600"
   delegate_to: localhost
-  when: not vault_init_status.json.initialized
+  when:
+    - not vault_init_status.json.initialized
+    - not (vault_auto_unseal_enabled | bool)
+    - not (vault_keys_file_stat.stat.exists | default(false))
   no_log: true
 
 - name: Show vault root token location
   ansible.builtin.debug:
     msg: "Vault initialized! Keys saved to {{ vault_keys_file }} on control node. KEEP SAFE."
-  when: not vault_init_status.json.initialized
+  when:
+    - not vault_init_status.json.initialized
+    - not (vault_auto_unseal_enabled | bool)
 
+# --- Unseal block (status 503 = initialized but sealed) ---
 - name: Check vault seal status
   ansible.builtin.uri:
     url: "{{ vault_api_addr }}/v1/sys/seal-status"
     method: GET
     validate_certs: "{{ vault_tls_enabled }}"
   register: vault_seal_status
+
+- name: Debug — vault is already unsealed, skipping unseal steps
+  ansible.builtin.debug:
+    msg: "Vault on {{ inventory_hostname }} is already unsealed. Nothing to do."
+  when: not vault_seal_status.json.sealed
 
 - name: Load keys from file (control node)
   ansible.builtin.set_fact:
@@ -72,6 +177,7 @@
   when:
     - vault_seal_status.json.sealed
     - vault_read_keys_from_file
+    - not (vault_auto_unseal_enabled | bool)
 
 - name: Unseal vault with keys from file
   ansible.builtin.uri:
@@ -85,6 +191,7 @@
   when:
     - vault_seal_status.json.sealed
     - vault_read_keys_from_file
+    - not (vault_auto_unseal_enabled | bool)
   no_log: true
 
 - name: Unseal vault with explicit keys
@@ -99,6 +206,7 @@
   when:
     - vault_seal_status.json.sealed
     - not vault_read_keys_from_file
+    - not (vault_auto_unseal_enabled | bool)
   no_log: true
 
 - name: Verify vault is unsealed

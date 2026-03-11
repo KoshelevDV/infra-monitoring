@@ -1,6 +1,9 @@
 ---
 galaxy_info:
+  author: infra-team
+  license: MIT
   role_name: vault
+  description: Ansible role vault
   min_ansible_version: "2.9"
 
 dependencies: []

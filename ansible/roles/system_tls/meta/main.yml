@@ -1,0 +1,22 @@
+---
+galaxy_info:
+  author: infra-team
+  description: Generate self-signed TLS certificates (CA + server cert) using community.crypto
+  min_ansible_version: "2.12"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - "20.04"
+        - "22.04"
+        - "24.04"
+  galaxy_tags:
+    - tls
+    - ssl
+    - certificates
+    - crypto
+    - vault
+
+dependencies: []
+
+collections:
+  - community.crypto

@@ -1,5 +1,7 @@
 ---
 galaxy_info:
+  author: infra-team
+  license: MIT
   role_name: unattended_upgrades
   description: Configure unattended-upgrades for automatic security patches
   min_ansible_version: "2.9"
