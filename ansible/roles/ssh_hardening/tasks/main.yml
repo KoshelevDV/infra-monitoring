@@ -25,6 +25,16 @@
     - Reload systemd
     - Restart ssh socket
 
+- name: Remove weak Diffie-Hellman moduli (< 3072 bits)
+  # Per Mozilla OpenSSH guidelines: all DH moduli should be >= 3072-bit
+  # https://infosec.mozilla.org/guidelines/openssh#modern-openssh-67
+  ansible.builtin.shell: |
+    awk '$5 >= 3071' /etc/ssh/moduli > /tmp/moduli.safe
+    mv /tmp/moduli.safe /etc/ssh/moduli
+  args:
+    executable: /bin/bash
+  changed_when: false
+
 - name: Deploy sshd hardening config
   ansible.builtin.template:
     src: 99-hardening.conf.j2

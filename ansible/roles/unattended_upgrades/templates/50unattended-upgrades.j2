@@ -1,0 +1,21 @@
+// Managed by Ansible — do not edit manually
+Unattended-Upgrade::Allowed-Origins {
+{% for origin in uu_origins_pattern %}
+    "{{ origin }}";
+{% endfor %}
+};
+
+Unattended-Upgrade::Package-Blacklist {
+};
+
+Unattended-Upgrade::Remove-Unused-Dependencies "{{ uu_remove_unused_dependencies | lower }}";
+
+Unattended-Upgrade::Automatic-Reboot "{{ uu_automatic_reboot | lower }}";
+{% if uu_automatic_reboot %}
+Unattended-Upgrade::Automatic-Reboot-Time "{{ uu_automatic_reboot_time }}";
+{% endif %}
+
+{% if uu_mail_to %}
+Unattended-Upgrade::Mail "{{ uu_mail_to }}";
+Unattended-Upgrade::MailReport "on-change";
+{% endif %}

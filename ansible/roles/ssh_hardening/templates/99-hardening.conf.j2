@@ -1,13 +1,42 @@
 # Managed by Ansible — do not edit manually
+
+# Port & authentication
 Port {{ ssh_port }}
 PermitRootLogin {{ ssh_permit_root_login }}
 PasswordAuthentication {{ ssh_password_authentication }}
 PubkeyAuthentication {{ ssh_pubkey_authentication }}
 AuthorizedKeysFile .ssh/authorized_keys
+PermitEmptyPasswords no
+HostbasedAuthentication no
+IgnoreRhosts yes
+
+# Forwarding — disabled
 X11Forwarding {{ ssh_x11_forwarding }}
 AllowAgentForwarding {{ ssh_allow_agent_forwarding }}
 AllowTcpForwarding {{ ssh_allow_tcp_forwarding }}
+AllowStreamLocalForwarding no
+GatewayPorts no
+PermitTunnel no
+
+# Limits & timeouts
 MaxAuthTries {{ ssh_max_auth_tries }}
+MaxSessions {{ ssh_max_sessions }}
 LoginGraceTime {{ ssh_login_grace_time }}
 ClientAliveInterval {{ ssh_client_alive_interval }}
 ClientAliveCountMax {{ ssh_client_alive_count_max }}
+
+# Logging — fingerprint visible in audit log
+LogLevel {{ ssh_log_level }}
+
+# Modern crypto — Mozilla OpenSSH guidelines (6.7+)
+# https://infosec.mozilla.org/guidelines/openssh#modern-openssh-67
+HostKey /etc/ssh/ssh_host_ed25519_key
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+
+KexAlgorithms {{ ssh_kex_algorithms }}
+Ciphers {{ ssh_ciphers }}
+MACs {{ ssh_macs }}
+
+# SFTP with audit logging
+Subsystem sftp internal-sftp -f AUTHPRIV -l INFO
