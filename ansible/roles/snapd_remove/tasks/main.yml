@@ -4,6 +4,7 @@
   register: snapd_check
   changed_when: false
   failed_when: false
+  tags: snapd_remove
 
 - name: Stop and disable snapd units
   ansible.builtin.systemd:
@@ -16,6 +17,7 @@
     - snapd.seeded.service
   when: snapd_check.rc == 0
   failed_when: false
+  tags: snapd_remove
 
 - name: Purge snapd package
   ansible.builtin.apt:
@@ -24,19 +26,23 @@
     purge: true
     autoremove: true
   when: snapd_check.rc == 0
+  tags: snapd_remove
 
 - name: Remove snapd directories
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   loop: "{{ snapd_remove_dirs }}"
+  tags: snapd_remove
 
 - name: Remove user snap directory
   ansible.builtin.file:
     path: "{{ ansible_env.HOME }}/snap"
     state: absent
+  tags: snapd_remove
 
 - name: Hold snapd to prevent reinstallation
   ansible.builtin.dpkg_selections:
     name: snapd
     selection: hold
+  tags: snapd_remove

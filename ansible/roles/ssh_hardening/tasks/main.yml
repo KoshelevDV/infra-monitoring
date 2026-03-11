@@ -3,6 +3,7 @@
   ansible.builtin.stat:
     path: /lib/systemd/system/ssh.socket
   register: ssh_socket_file
+  tags: ssh_hardening
 
 - name: Create systemd socket override directory (Ubuntu 24.04+)
   ansible.builtin.file:
@@ -12,6 +13,7 @@
     group: root
     mode: "0755"
   when: ssh_socket_file.stat.exists
+  tags: ssh_hardening
 
 - name: Deploy systemd socket override (Ubuntu 24.04+)
   ansible.builtin.template:
@@ -24,16 +26,28 @@
   notify:
     - Reload systemd
     - Restart ssh socket
+  tags: ssh_hardening
 
-- name: Remove weak Diffie-Hellman moduli (< 3072 bits)
+- name: Check for weak Diffie-Hellman moduli (< 3072 bits)
   # Per Mozilla OpenSSH guidelines: all DH moduli should be >= 3072-bit
   # https://infosec.mozilla.org/guidelines/openssh#modern-openssh-67
+  ansible.builtin.shell: |
+    awk '$5 < 3071 && $1 !~ /^#/' /etc/ssh/moduli | wc -l
+  args:
+    executable: /bin/bash
+  register: weak_moduli_count
+  changed_when: false
+  tags: ssh_hardening
+
+- name: Remove weak Diffie-Hellman moduli (< 3072 bits)
   ansible.builtin.shell: |
     awk '$5 >= 3071' /etc/ssh/moduli > /tmp/moduli.safe
     mv /tmp/moduli.safe /etc/ssh/moduli
   args:
     executable: /bin/bash
-  changed_when: false
+  when: weak_moduli_count.stdout | int > 0
+  changed_when: true
+  tags: ssh_hardening
 
 - name: Deploy sshd hardening config
   ansible.builtin.template:
@@ -42,14 +56,17 @@
     owner: root
     group: root
     mode: "0600"
-  notify: Reload ssh
+  notify: Reload ssh service
+  tags: ssh_hardening
 
 - name: Validate sshd config
   ansible.builtin.command: sshd -t
   changed_when: false
+  tags: ssh_hardening
 
 - name: Flush handlers to apply SSH changes before continuing
   ansible.builtin.meta: flush_handlers
+  tags: ssh_hardening
 
 - name: Wait for SSH on new port
   ansible.builtin.wait_for:
@@ -59,3 +76,4 @@
     timeout: 30
   delegate_to: localhost
   become: false
+  tags: ssh_hardening

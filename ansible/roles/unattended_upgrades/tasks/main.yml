@@ -6,6 +6,8 @@
       - apt-listchanges
     state: present
     update_cache: true
+    cache_valid_time: 3600
+  tags: unattended_upgrades
 
 - name: Deploy unattended-upgrades config
   ansible.builtin.template:
@@ -14,6 +16,8 @@
     owner: root
     group: root
     mode: "0644"
+  notify: Restart unattended-upgrades
+  tags: unattended_upgrades
 
 - name: Deploy APT periodic config
   ansible.builtin.template:
@@ -22,9 +26,12 @@
     owner: root
     group: root
     mode: "0644"
+  notify: Restart unattended-upgrades
+  tags: unattended_upgrades
 
 - name: Enable and start unattended-upgrades service
   ansible.builtin.systemd:
     name: unattended-upgrades
     enabled: true
     state: started
+  tags: unattended_upgrades

@@ -4,6 +4,8 @@
     name: fail2ban
     state: present
     update_cache: true
+    cache_valid_time: 3600
+  tags: fail2ban
 
 - name: Create fail2ban jail.d directory
   ansible.builtin.file:
@@ -12,6 +14,7 @@
     owner: root
     group: root
     mode: "0755"
+  tags: fail2ban
 
 - name: Deploy sshd jail config
   ansible.builtin.template:
@@ -21,18 +24,33 @@
     group: root
     mode: "0644"
   notify: Restart fail2ban
+  tags: fail2ban
+
+- name: Deploy extra jail configs
+  ansible.builtin.copy:
+    content: "{{ item.config_content }}"
+    dest: "/etc/fail2ban/jail.d/{{ item.name }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ fail2ban_extra_jails }}"
+  notify: Restart fail2ban
+  tags: fail2ban
 
 - name: Enable and start fail2ban
   ansible.builtin.systemd:
     name: fail2ban
     enabled: true
     state: started
+  tags: fail2ban
 
 - name: Flush handlers
   ansible.builtin.meta: flush_handlers
+  tags: fail2ban
 
 - name: Verify fail2ban sshd jail is active
   ansible.builtin.command: fail2ban-client status sshd
   register: f2b_status
   changed_when: false
   failed_when: "'Status for the jail' not in f2b_status.stdout"
+  tags: fail2ban

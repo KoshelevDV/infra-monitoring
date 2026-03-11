@@ -4,6 +4,8 @@
     name: ufw
     state: present
     update_cache: true
+    cache_valid_time: 3600
+  tags: ufw
 
 - name: Set UFW default policies
   community.general.ufw:
@@ -12,6 +14,17 @@
   loop:
     - { direction: incoming, policy: deny }
     - { direction: outgoing, policy: allow }
+  tags: ufw
+
+- name: Set UFW default forward policy
+  ansible.builtin.lineinfile:
+    path: /etc/default/ufw
+    regexp: '^DEFAULT_FORWARD_POLICY='
+    line: 'DEFAULT_FORWARD_POLICY="{{ ufw_default_forward_policy }}"'
+    owner: root
+    group: root
+    mode: "0644"
+  tags: ufw
 
 - name: Allow SSH on custom port (open to all, fail2ban protects it)
   community.general.ufw:
@@ -19,6 +32,7 @@
     port: "{{ ufw_ssh_port | string }}"
     proto: tcp
     comment: "SSH port {{ ufw_ssh_port }}"
+  tags: ufw
 
 - name: Allow full access from trusted IPs
   community.general.ufw:
@@ -26,6 +40,7 @@
     from_ip: "{{ item }}"
     comment: "trusted IP full access"
   loop: "{{ ufw_trusted_ips }}"
+  tags: ufw
 
 - name: Apply extra UFW rules
   community.general.ufw:
@@ -35,11 +50,14 @@
     from_ip: "{{ item.from | default('any') }}"
     comment: "{{ item.comment | default('') }}"
   loop: "{{ ufw_extra_rules }}"
+  tags: ufw
 
 - name: Set UFW logging
   community.general.ufw:
     logging: "{{ ufw_logging }}"
+  tags: ufw
 
 - name: Enable UFW
   community.general.ufw:
     state: enabled
+  tags: ufw

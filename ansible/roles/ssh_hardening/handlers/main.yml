@@ -12,3 +12,10 @@
   ansible.builtin.systemd:
     name: ssh
     state: reloaded
+
+- name: Reload ssh service
+  # Works for both Ubuntu 24.04+ (socket-activated) and older (classic service)
+  # Reloading ssh.service applies sshd_config changes in both cases
+  ansible.builtin.systemd:
+    name: ssh
+    state: reloaded

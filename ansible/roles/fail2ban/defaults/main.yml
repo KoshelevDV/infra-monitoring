@@ -9,3 +9,14 @@ fail2ban_ignoreip: "127.0.0.1/8 ::1"
 fail2ban_whitelist_ips: []
 # fail2ban_whitelist_ips:
 #   - 188.235.162.120
+
+# Extra jails to deploy — list of {name, config_content}
+fail2ban_extra_jails: []
+# fail2ban_extra_jails:
+#   - name: nginx-http-auth
+#     config_content: |
+#       [nginx-http-auth]
+#       enabled  = true
+#       port     = http,https
+#       logpath  = /var/log/nginx/error.log
+#       maxretry = 3
