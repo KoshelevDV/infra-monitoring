@@ -1,5 +1,6 @@
 ---
 galaxy_info:
+  author: infra-team
   role_name: docker
   min_ansible_version: "2.9"
 

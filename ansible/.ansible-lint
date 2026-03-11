@@ -1,0 +1,15 @@
+profile: moderate
+warn_list:
+  - no-changed-when
+  - command-instead-of-module
+skip_list:
+  - yaml[line-length]
+  - name[casing]
+exclude_paths:
+  - ansible/roles/kafka
+  - ansible/roles/kafka_ha
+  - ansible/roles/kafka-exporter
+  - ansible/roles/jmx-exporter
+  - ansible/roles/mssql-exporter
+  - ansible/roles/mysql-exporter
+  - ansible/roles/postgres-exporter

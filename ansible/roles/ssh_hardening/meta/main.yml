@@ -1,5 +1,7 @@
 ---
 galaxy_info:
+  author: infra-team
+  license: MIT
   role_name: ssh_hardening
   description: Harden SSH daemon configuration (port, crypto, auth policies)
   min_ansible_version: "2.9"

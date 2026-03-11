@@ -1,0 +1,11 @@
+---
+tls_dir: /etc/ssl/vault
+tls_ca_common_name: "Internal CA"
+tls_cert_common_name: "{{ inventory_hostname }}"
+tls_cert_san_ips: []          # доп. IP SANs
+tls_cert_san_dns: []          # доп. DNS SANs
+tls_valid_days: 1825           # 5 лет для CA
+tls_cert_valid_days: 365       # 1 год для server cert
+tls_owner: vault
+tls_group: vault
+tls_key_size: 4096

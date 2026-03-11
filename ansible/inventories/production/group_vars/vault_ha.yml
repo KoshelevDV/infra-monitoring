@@ -9,6 +9,10 @@ vault_log_level: info
 vault_disable_mlock: false
 vault_telemetry_enabled: true
 
+# TLS settings (managed by system_tls role)
+vault_tls_cert_file: /etc/ssl/vault/server.crt
+vault_tls_key_file: /etc/ssl/vault/server.key
+
 # Peers для Raft retry_join — добавить IP всех нод кластера
 vault_raft_peers:
   - leader_api_addr: "http://10.0.0.1:8200"
