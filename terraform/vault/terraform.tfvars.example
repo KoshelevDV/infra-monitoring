@@ -15,11 +15,24 @@ policies = [
     rules = [
       { path = "secret/data/*", capabilities = ["read", "list"] }
     ]
+  },
+  {
+    name = "ci-deploy"
+    rules = [
+      { path = "secret/data/ci/*", capabilities = ["read"] }
+    ]
   }
 ]
 
+# Расширение default политики (опционально)
+# default_policy = {
+#   extra_rules = [
+#     { path = "secret/data/shared/*", capabilities = ["read"] }
+#   ]
+# }
+
 kv_engines = [
-  { path = "secret", description = "Main KV store",        max_versions = 10 },
+  { path = "secret", description = "Main KV store",          max_versions = 10 },
   { path = "infra",  description = "Infrastructure secrets", max_versions = 5 }
 ]
 
@@ -35,4 +48,48 @@ approle_roles = [
 
 userpass_users = [
   { username = "admin", password = "CHANGE_ME", policies = ["admin"] }
+]
+
+# JWT/OIDC auth roles (e.g. GitHub Actions)
+jwt_roles = [
+  {
+    role_name      = "github-actions-deploy"
+    jwks_url       = "https://token.actions.githubusercontent.com/.well-known/jwks"
+    bound_issuer   = "https://token.actions.githubusercontent.com"
+    token_policies = ["ci-deploy"]
+    token_ttl      = 3600
+    token_max_ttl  = 3600
+    bound_claims   = {
+      repository = "myorg/myrepo"
+    }
+  }
+]
+
+# Transit secret engine (e.g. for Vault auto-unseal)
+transit_engines = [
+  {
+    name        = "autounseal"
+    path        = "transit"
+    policy_name = "autounseal-policy"
+  }
+]
+
+# Audit devices
+audit_config = {
+  enable_file   = true
+  file_path     = "/var/log/vault/audit.log"
+  enable_syslog = false
+}
+
+# Password policies for dynamic credentials
+password_policies = [
+  {
+    name = "strong"
+    rules = [
+      { charset = "abcdefghijklmnopqrstuvwxyz", min_chars = 2 },
+      { charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ", min_chars = 2 },
+      { charset = "0123456789",                 min_chars = 2 },
+      { charset = "!@#$%^&*",                   min_chars = 1 }
+    ]
+  }
 ]

@@ -4,7 +4,7 @@ variable "name" {
 }
 
 variable "rules" {
-  description = "List of policy rules"
+  description = "List of path rules. Each rule defines a Vault path and allowed capabilities"
   type = list(object({
     path         = string
     capabilities = list(string)
