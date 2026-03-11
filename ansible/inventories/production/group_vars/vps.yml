@@ -1,0 +1,33 @@
+---
+# ── VPS group variables ────────────────────────────────────────────────────────
+# Overrides defaults from roles for VPS/standalone servers.
+# Add/remove hosts in hosts.yml under the `vps` group.
+
+# SSH
+ssh_port: 22022
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"
+
+# UFW — trusted management IPs (full access, no restrictions)
+# Set to [] to skip trusted IP rules
+ufw_trusted_ips:
+  - 188.235.162.120   # management host
+
+# UFW — additional port rules beyond SSH
+# Format: { port, proto, from, comment }
+ufw_extra_rules: []
+# ufw_extra_rules:
+#   - { port: 80,  proto: tcp, from: any, comment: "HTTP" }
+#   - { port: 443, proto: tcp, from: any, comment: "HTTPS" }
+
+# Fail2ban — IPs that are never banned
+fail2ban_whitelist_ips:
+  - 188.235.162.120   # management host
+
+# Unattended upgrades — reboot allowed on VPS (low-traffic)
+uu_automatic_reboot: false
+uu_automatic_reboot_time: "04:00"
+
+# Docker — users to add to docker group
+docker_users:
+  - "{{ ansible_user }}"

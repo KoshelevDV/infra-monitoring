@@ -2,6 +2,8 @@
 postgres_exporter_version: "0.15.0"
 postgres_exporter_port: 9187
 postgres_exporter_user: postgres-exporter
-postgres_exporter_dsn: "postgresql://exporter:secret@localhost/postgres?sslmode=disable"
+# REQUIRED: set in group_vars/postgresql.yml or host_vars/<host>.yml
+# postgres_exporter_dsn: "postgresql://exporter:CHANGE_ME@localhost/postgres?sslmode=disable"
+postgres_exporter_dsn: ""
 postgres_exporter_custom_queries: true
 postgres_exporter_extra_args: ""
