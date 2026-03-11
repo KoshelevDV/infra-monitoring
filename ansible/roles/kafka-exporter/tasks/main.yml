@@ -42,6 +42,27 @@
     kafka_exporter_installed.rc != 0 or
     kafka_exporter_version not in kafka_exporter_installed.stdout
 
+- name: Create kafka-exporter config directory
+  ansible.builtin.file:
+    path: "{{ exporter_config_dir }}/kafka-exporter"
+    state: directory
+    owner: "{{ kafka_exporter_user }}"
+    group: "{{ kafka_exporter_user }}"
+    mode: "0750"
+  tags: kafka_exporter
+
+- name: Create kafka-exporter credentials file
+  ansible.builtin.template:
+    src: kafka-exporter.env.j2
+    dest: "{{ exporter_config_dir }}/kafka-exporter/.env"
+    owner: "{{ kafka_exporter_user }}"
+    group: "{{ kafka_exporter_user }}"
+    mode: "0600"
+  no_log: true
+  when: kafka_sasl_enabled
+  notify: Restart kafka-exporter
+  tags: kafka_exporter
+
 - name: Deploy kafka-exporter systemd service
   ansible.builtin.template:
     src: kafka-exporter.service.j2

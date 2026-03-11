@@ -78,6 +78,17 @@
   changed_when: false
   ignore_errors: true  # Skip if PostgreSQL is remote
 
+- name: Create postgres-exporter credentials file
+  ansible.builtin.template:
+    src: postgres-exporter.env.j2
+    dest: "{{ exporter_config_dir }}/postgres-exporter/.env"
+    owner: "{{ postgres_exporter_user }}"
+    group: "{{ postgres_exporter_user }}"
+    mode: "0600"
+  no_log: true
+  notify: Restart postgres-exporter
+  tags: postgres_exporter
+
 - name: Deploy postgres_exporter systemd service
   ansible.builtin.template:
     src: postgres-exporter.service.j2

@@ -1,4 +1,10 @@
 ---
+- name: Assert mssql_dsn is set
+  ansible.builtin.assert:
+    that: mssql_dsn | length > 0
+    fail_msg: "mssql_dsn must be set in group_vars or host_vars, not left empty"
+  tags: mssql_exporter
+
 - name: Create mssql-exporter system user
   ansible.builtin.user:
     name: "{{ mssql_exporter_user }}"

@@ -7,6 +7,7 @@ After=network-online.target
 User={{ kafka_exporter_user }}
 Group={{ kafka_exporter_user }}
 Type=simple
+EnvironmentFile=-/etc/prometheus-exporters/kafka-exporter/.env
 ExecStart={{ exporter_bin_dir }}/kafka_exporter \
     --web.listen-address={{ exporter_listen_address }}:{{ kafka_exporter_port }} \
 {% for broker in kafka_brokers %}
@@ -14,8 +15,8 @@ ExecStart={{ exporter_bin_dir }}/kafka_exporter \
 {% endfor %}
 {% if kafka_sasl_enabled %}
     --sasl.enabled \
-    --sasl.username={{ kafka_sasl_username | default('') }} \
-    --sasl.password={{ kafka_sasl_password | default('') }} \
+    --sasl.username=${KAFKA_SASL_USERNAME} \
+    --sasl.password=${KAFKA_SASL_PASSWORD} \
     --sasl.mechanism={{ kafka_sasl_mechanism | default('plain') }} \
 {% endif %}
 {% if kafka_tls_enabled %}
