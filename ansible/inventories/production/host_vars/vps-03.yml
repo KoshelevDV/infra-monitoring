@@ -1,0 +1,30 @@
+---
+# vps-03 — 64.188.63.31 (VPN сервер)
+
+# SSH
+ssh_port: 22022
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"
+
+# UFW — trusted management IP (full access)
+ufw_trusted_ips:
+  - 188.235.162.120   # management host
+
+# UFW — VPN порты открыты всем
+ufw_extra_rules:
+  - { port: 16364, proto: udp, from: any, comment: "AmneziaWG" }
+  - { port: 1194,  proto: udp, from: any, comment: "OpenVPN" }
+  - { port: 443,   proto: tcp, from: any, comment: "XRay/TLS inbounds" }
+  - { port: 80,    proto: tcp, from: any, comment: "HTTP (XRay redirect)" }
+  - { port: 2053,  proto: tcp, from: any, comment: "3x-ui panel" }
+
+# ICMP — блокировать ping (stealth режим)
+ufw_block_icmp_echo: true
+
+# Fail2ban
+fail2ban_whitelist_ips:
+  - 188.235.162.120
+
+# Unattended upgrades
+uu_automatic_reboot: false
+uu_automatic_reboot_time: "04:00"
