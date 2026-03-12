@@ -12,7 +12,8 @@ ufw_trusted_ips:
 
 # UFW — VPN порты открыты всем
 ufw_extra_rules:
-  - { port: 16364, proto: udp, from: any, comment: "AmneziaWG" }
+  - { port: 16364, proto: udp, from: any, comment: "AmneziaWG (obfuscated)" }
+  - { port: 56211, proto: udp, from: any, comment: "WireGuard" }
   - { port: 1194,  proto: udp, from: any, comment: "OpenVPN" }
   - { port: 443,   proto: tcp, from: any, comment: "XRay/TLS inbounds" }
   - { port: 80,    proto: tcp, from: any, comment: "HTTP (XRay redirect)" }
