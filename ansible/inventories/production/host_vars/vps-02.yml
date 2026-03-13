@@ -1,0 +1,23 @@
+---
+# vps-02 — 5.129.253.211 (Timeweb)
+
+# SSH
+ssh_port: 22022
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"
+
+# UFW — trusted management IPs (full access)
+ufw_trusted_ips:
+  - 188.235.162.120   # management host
+
+# UFW — explicit extra rules
+ufw_extra_rules:
+  - { port: 8089, proto: tcp, from: 188.235.162.120, comment: "port 8089 from management IP" }
+
+# Fail2ban
+fail2ban_whitelist_ips:
+  - 188.235.162.120
+
+# Unattended upgrades
+uu_automatic_reboot: false
+uu_automatic_reboot_time: "04:00"

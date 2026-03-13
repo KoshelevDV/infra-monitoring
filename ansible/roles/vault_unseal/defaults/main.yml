@@ -1,24 +1,25 @@
 ---
-vault_api_addr: "http://127.0.0.1:8200"
+# Vault API port (used to build health/init/unseal URLs)
+vault_api_port: 8200
+
+# TLS settings
 vault_tls_enabled: false
 vault_tls_ca_cert: ""
+vault_unseal_skip_tls_verify: false
 
 # vault operator init params
-vault_init_key_shares: 5
-vault_init_key_threshold: 3
+vault_key_shares: 5
+vault_key_threshold: 3
 
-# Куда сохранять unseal keys и root token (на Ansible-control node)
-vault_keys_output_dir: "{{ playbook_dir }}/vault-keys"
-vault_keys_file: "{{ vault_keys_output_dir }}/{{ inventory_hostname }}-vault-keys.json"
+# Путь для сохранения ключей локально (на ansible controller)
+vault_unseal_output_keys_dir: "vault-keys"
 
-# Unseal: подать ключи вручную (vault_unseal_keys) или читать из файла (vault_read_keys_from_file)
-# Если vault_read_keys_from_file=true — читать vault_keys_file, иначе использовать vault_unseal_keys
-vault_read_keys_from_file: true
-vault_unseal_keys: []  # список ключей (если не читаем из файла)
+# Временный файл в RAM для ключей (удаляется в always)
+vault_unseal_tmp_file: "/dev/shm/vault_keys_tmp.json"
 
-# Количество ключей для unseal (должно быть >= key_threshold)
-vault_unseal_key_count: 3
+# Статус-коды для /v1/sys/health: 200=ok, 501=not init, 503=sealed
+vault_unseal_expected_status_codes: [200, 201, 400, 429, 472, 501, 503]
 
-# Auto-Unseal: если true — vault использует Transit/Cloud KMS, unseal keys не нужны
-# При включении: инициализация использует recovery_shares/recovery_threshold вместо secret_shares/secret_threshold
-vault_auto_unseal_enabled: false
+# Transit Auto-Unseal: если true — vault использует Transit/Cloud KMS
+# При включении: инициализация использует recovery_shares/recovery_threshold
+vault_transit_unseal_enabled: false

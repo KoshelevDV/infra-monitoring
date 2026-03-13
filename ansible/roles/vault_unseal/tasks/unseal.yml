@@ -1,0 +1,189 @@
+---
+- name: Ensure that directory for saving keys exists
+  ansible.builtin.file:
+    path: "./{{ vault_unseal_output_keys_dir }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  run_once: true
+  become: false
+  tags: vault_unseal
+
+- name: Check general Vault health status
+  ansible.builtin.uri:
+    url: "{{ vault_tls_enabled | ternary('https', 'http') }}://{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}:{{ vault_api_port }}/v1/sys/health"
+    validate_certs: "{{ not vault_unseal_skip_tls_verify }}"
+    status_code: "{{ vault_unseal_expected_status_codes }}"
+  register: vault_health_response
+  tags: vault_unseal
+
+- name: Set a received Vault status to a variable
+  ansible.builtin.set_fact:
+    vault_status: "{{ vault_health_response.status }}"
+  tags: vault_unseal
+
+- name: Show current status code for each Vault instance
+  ansible.builtin.debug:
+    msg: "Current status code is {{ vault_status }} for Vault on {{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}"
+  tags: vault_unseal
+
+# --- Initialize with Transit Auto-Unseal (status 501 + transit enabled) ---
+- name: Initialize Vault with Transit Auto-Unseal
+  when: vault_status | string == "501" and vault_transit_unseal_enabled | bool
+  tags: vault_unseal
+  block:
+    - name: Start the Vault initialization process with Transit Auto-Unseal
+      ansible.builtin.uri:
+        url: "{{ vault_tls_enabled | ternary('https', 'http') }}://{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}:{{ vault_api_port }}/v1/sys/init"
+        validate_certs: "{{ not vault_unseal_skip_tls_verify }}"
+        body:
+          recovery_shares: "{{ vault_key_shares }}"
+          recovery_threshold: "{{ vault_key_threshold }}"
+        body_format: json
+        method: PUT
+      register: vault_init_transit_response
+
+    - name: Create temporary JSON file with Vault recovery keys in RAM
+      ansible.builtin.copy:
+        content: "{{ vault_init_transit_response.json | to_nice_json }}"
+        dest: "{{ vault_unseal_tmp_file }}"
+        mode: "0600"
+      no_log: true
+
+    - name: Transfer Recovery Keys to ansible controller
+      ansible.builtin.fetch:
+        src: "{{ vault_unseal_tmp_file }}"
+        dest: "./{{ vault_unseal_output_keys_dir }}/{{ inventory_hostname }}/vault_recovery_keys.json"
+        flat: true
+      no_log: true
+
+    - name: Wait for Vault to auto-unseal via Transit
+      ansible.builtin.uri:
+        url: "{{ vault_tls_enabled | ternary('https', 'http') }}://{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}:{{ vault_api_port }}/v1/sys/health"
+        validate_certs: "{{ not vault_unseal_skip_tls_verify }}"
+        status_code: 200
+      register: vault_transit_unseal_status
+      until: vault_transit_unseal_status.status == 200
+      retries: 10
+      delay: 3
+
+    - name: Output Transit Auto-Unseal result
+      ansible.builtin.debug:
+        msg: "Vault auto-unsealed via Transit: {{ vault_transit_unseal_status.json.sealed == false }}"
+
+  always:
+    - name: Delete temporary JSON file with recovery keys from RAM
+      ansible.builtin.file:
+        path: "{{ vault_unseal_tmp_file }}"
+        state: absent
+
+# --- Initialize and unseal Vault without Transit (status 501, no transit) ---
+- name: Initialize and unseal Vault without Transit Auto-Unseal
+  when: vault_status | string == "501" and not (vault_transit_unseal_enabled | bool)
+  tags: vault_unseal
+  block:
+    - name: Start the Vault initialization process
+      ansible.builtin.uri:
+        url: "{{ vault_tls_enabled | ternary('https', 'http') }}://{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}:{{ vault_api_port }}/v1/sys/init"
+        validate_certs: "{{ not vault_unseal_skip_tls_verify }}"
+        status_code: "{{ vault_unseal_expected_status_codes }}"
+        body:
+          secret_shares: "{{ vault_key_shares }}"
+          secret_threshold: "{{ vault_key_threshold }}"
+        body_format: json
+        method: PUT
+      register: vault_init_response
+
+    - name: Save Root Token and Unseal Keys to variables
+      ansible.builtin.set_fact:
+        vault_keys: "{{ vault_init_response.json.keys_base64 }}"
+      no_log: true
+
+    - name: Create temporary JSON file with Vault keys in RAM
+      ansible.builtin.copy:
+        content: "{{ vault_init_response.json | to_nice_json }}"
+        dest: "{{ vault_unseal_tmp_file }}"
+        mode: "0600"
+      no_log: true
+
+    - name: Transfer Root Token and Unseal Keys to ansible controller
+      ansible.builtin.fetch:
+        src: "{{ vault_unseal_tmp_file }}"
+        dest: "./{{ vault_unseal_output_keys_dir }}/{{ inventory_hostname }}/vault_keys.json"
+        flat: true
+      no_log: true
+
+    - name: Wait for Vault to transition to sealed state after initialization
+      ansible.builtin.uri:
+        url: "{{ vault_tls_enabled | ternary('https', 'http') }}://{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}:{{ vault_api_port }}/v1/sys/health"
+        validate_certs: "{{ not vault_unseal_skip_tls_verify }}"
+        status_code: 503
+      register: vault_sealed_response
+      until: vault_sealed_response.status == 503
+      retries: 5
+      delay: 3
+
+    - name: Performing unseal Vault using previously obtained keys
+      ansible.builtin.uri:
+        url: "{{ vault_tls_enabled | ternary('https', 'http') }}://{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}:{{ vault_api_port }}/v1/sys/unseal"
+        validate_certs: "{{ not vault_unseal_skip_tls_verify }}"
+        body:
+          key: "{{ item }}"
+        body_format: json
+        method: PUT
+      loop: "{{ vault_keys[0:vault_key_threshold | int] }}"
+      no_log: true
+
+    - name: Verify that Vault is unsealed
+      ansible.builtin.uri:
+        url: "{{ vault_tls_enabled | ternary('https', 'http') }}://{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}:{{ vault_api_port }}/v1/sys/health"
+        validate_certs: "{{ not vault_unseal_skip_tls_verify }}"
+        status_code: 200
+      register: vault_final_status
+      until: vault_final_status.status == 200
+      retries: 5
+      delay: 3
+
+    - name: Output unseal result
+      ansible.builtin.debug:
+        msg: "Unseal Vault status: {{ vault_final_status.json.sealed == false }} for {{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}"
+
+  always:
+    - name: Delete temporary JSON file with Vault keys from RAM
+      ansible.builtin.file:
+        path: "{{ vault_unseal_tmp_file }}"
+        state: absent
+
+# --- Re-unseal Vault using previously saved keys (status 503, no transit) ---
+- name: Re-unseal Vault using previously saved keys without Transit
+  when: vault_status | string == "503" and not (vault_transit_unseal_enabled | bool)
+  tags: vault_unseal
+  block:
+    - name: Read Unseal Keys from file created during initialization
+      ansible.builtin.slurp:
+        src: "./{{ vault_unseal_output_keys_dir }}/{{ inventory_hostname }}/vault_keys.json"
+      register: unseal_vault_keys
+      delegate_to: localhost
+      become: false
+
+    - name: Convert keys from Base64 to plain text
+      ansible.builtin.set_fact:
+        vault_keys_from_file: "{{ unseal_vault_keys.content | b64decode | from_json | json_query('keys_base64') }}"
+
+    - name: Unseal Vault using keys from file
+      ansible.builtin.uri:
+        url: "{{ vault_tls_enabled | ternary('https', 'http') }}://{{ hostvars[inventory_hostname].ansible_host | default(inventory_hostname) }}:{{ vault_api_port }}/v1/sys/unseal"
+        validate_certs: "{{ not vault_unseal_skip_tls_verify }}"
+        body:
+          key: "{{ item }}"
+        body_format: json
+        method: PUT
+      loop: "{{ vault_keys_from_file[0:vault_key_threshold | int] }}"
+      no_log: true
+      when: vault_keys_from_file is defined
+
+# --- Early exit if Vault already initialized and unsealed ---
+- name: End the host if Vault already initialized and unsealed
+  ansible.builtin.meta: end_host
+  when: vault_status | string == "200"
+  tags: vault_unseal

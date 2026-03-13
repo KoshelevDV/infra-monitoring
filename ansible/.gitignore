@@ -1,0 +1,4 @@
+# Ansible collections — не коммитить в репо, устанавливать через requirements.yml
+collections/
+*.retry
+/tmp/ansible_facts/

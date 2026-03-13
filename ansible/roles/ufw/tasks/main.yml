@@ -52,6 +52,16 @@
   loop: "{{ ufw_extra_rules }}"
   tags: ufw
 
+- name: Block ICMP echo-request (disable ping)
+  ansible.builtin.lineinfile:
+    path: /etc/ufw/before.rules
+    regexp: '-A ufw-before-input -p icmp --icmp-type echo-request -j ACCEPT'
+    line: '-A ufw-before-input -p icmp --icmp-type echo-request -j DROP'
+    backrefs: true
+  when: ufw_block_icmp_echo | default(false)
+  notify: Reload ufw
+  tags: ufw
+
 - name: Set UFW logging
   community.general.ufw:
     logging: "{{ ufw_logging }}"
